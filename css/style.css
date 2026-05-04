@@ -608,16 +608,17 @@ html.no-anim #loading-screen {
 }
 
 /* The hand-drawn loading image — pulse + subtle spin on the dots */
-.ls-img {
-  width: 260px;
-  max-width: 70vw;
-  image-rendering: pixelated;
-  animation: ls-pulse 1.8s ease-in-out infinite;
-  filter: brightness(1);
+.ls-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #2a2a2a;
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: ls-spin 0.7s linear infinite;
 }
+@keyframes ls-spin { to { transform: rotate(360deg); } }
 
-@keyframes ls-pulse {
-  0%, 100% { opacity: 1;   transform: scale(1); }
+
   50%       { opacity: 0.7; transform: scale(0.97); }
 }
 

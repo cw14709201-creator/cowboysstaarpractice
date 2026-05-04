@@ -343,7 +343,7 @@
       (document.getElementById('game-wrap').requestFullscreen?.() ||
        document.getElementById('game-wrap').webkitRequestFullscreen?.());
     });
-    document.getElementById('btn-home').addEventListener('click', () => { window.location.href = '/'; });
+    document.getElementById('btn-home').addEventListener('click', () => { window.location.href = './'; });
 
     /* ── FPS counter ── */
     const fpsBadge = document.getElementById('fps-badge');
@@ -427,7 +427,7 @@
     /* ── Keyboard shortcuts ── */
     document.addEventListener('keydown', (e) => {
       if (document.activeElement === resSel) return;
-      if (e.key === 'Escape') window.location.href = '/';
+      if (e.key === 'Escape') window.location.href = './';
       if (e.key === 'f' || e.key === 'F') document.getElementById('btn-fullscreen').click();
       if (e.key === 'r' || e.key === 'R') document.getElementById('btn-reload').click();
     });

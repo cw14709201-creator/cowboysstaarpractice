@@ -311,7 +311,7 @@ document.getElementById('btn-fullscreen').addEventListener('click', () => {
   const el = document.getElementById('player-area');
   (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el);
 });
-document.getElementById('btn-home').addEventListener('click', () => window.location.href = '/');
+document.getElementById('btn-home').addEventListener('click', () => window.location.href = './');
 document.getElementById('sidebar-toggle').addEventListener('click', () =>
   document.getElementById('sidebar').classList.toggle('open')
 );

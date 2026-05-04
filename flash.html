@@ -348,7 +348,7 @@ document.getElementById('btn-fullscreen').addEventListener('click', () => {
   (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
 });
 
-document.getElementById('btn-home').addEventListener('click', () => window.location.href = '/');
+document.getElementById('btn-home').addEventListener('click', () => window.location.href = './');
 
 document.getElementById('sidebar-toggle').addEventListener('click', () =>
   document.getElementById('sidebar').classList.toggle('open')
@@ -361,7 +361,7 @@ document.getElementById('game-search-sidebar').addEventListener('input', e => {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'f' || e.key === 'F') document.getElementById('btn-fullscreen').click();
-  if (e.key === 'Escape' && !currentGame) window.location.href = '/';
+  if (e.key === 'Escape' && !currentGame) window.location.href = './';
 });
 
 // Save playtime on unload

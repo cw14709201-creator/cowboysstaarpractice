@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rye&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="./css/style.css" />
   <!-- Apply no-anim immediately to avoid flash of animations for users who disabled them -->
   <script>if(localStorage.getItem('cowboysstuff_anim')==='off')document.documentElement.classList.add('no-anim');</script>
 </head>
@@ -47,7 +47,7 @@
   <!-- LOADING SCREEN -->
   <div id="loading-screen" aria-hidden="true">
     <div class="ls-inner">
-      <img src="/loading.png" class="ls-img" alt="" draggable="false" />
+      <img src="./loading.png" class="ls-img" alt="" draggable="false" />
       <p class="ls-msg" id="ls-msg">loading...</p>
     </div>
   </div>
@@ -190,16 +190,16 @@
     <!-- NAV BAR -->
     <nav class="navbar" role="navigation">
       <button class="nav-logo-btn" id="home-btn" title="Home" aria-label="Home">
-        <img src="/kromp.png" class="kromp-logo" alt="kromp" draggable="false" />
+        <img src="./kromp.png" class="kromp-logo" alt="kromp" draggable="false" />
       </button>
 
       <div class="nav-icons">
-        <a class="nav-icon-btn" href="/flash" title="Flash games (⚡)" aria-label="Flash">
+        <a class="nav-icon-btn" href="./flash.html" title="Flash games (⚡)" aria-label="Flash">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
         </a>
-        <a class="nav-icon-btn" href="/retro" title="Retro console games (🕹)" aria-label="Retro">
+        <a class="nav-icon-btn" href="./retro.html" title="Retro console games (🕹)" aria-label="Retro">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <rect x="2" y="6" width="20" height="12" rx="3"/>
             <path d="M6 10v4M8 12h-4M14 11h4M14 13h4"/>
@@ -256,7 +256,7 @@
 
         <!-- Kromp logo hero -->
         <div class="hero-logo-wrap">
-          <img src="/kromp.png" class="hero-logo" alt="kromp" draggable="false" />
+          <img src="./kromp.png" class="hero-logo" alt="kromp" draggable="false" />
         </div>
 
         <h1 class="site-title">cowboysstuff</h1>
@@ -287,7 +287,7 @@
         <div class="icon-grid app-grid">
 
           <!-- Movies / SpenFlix — full-screen proxy -->
-          <a class="icon-card app-card" href="/watch" aria-label="Movies">
+          <a class="icon-card app-card" href="./watch.html" aria-label="Movies">
             <div class="icon-face movies-face">
               <!-- Film/play icon -->
               <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -455,8 +455,8 @@
     <footer class="bottom-bar">
       <div class="bottom-links">
         <span class="bottom-tagline">cowboysstuff</span>
-        <a class="footer-page-link" href="/dmca">dmca</a>
-        <a class="footer-page-link" href="/credits">credits</a>
+        <a class="footer-page-link" href="./dmca.html">dmca</a>
+        <a class="footer-page-link" href="./credits.html">credits</a>
       </div>
       <div class="bottom-actions">
         <button class="bottom-btn" id="footer-settings" title="Settings" aria-label="Settings">
@@ -587,7 +587,7 @@
 
   </div><!-- /app -->
 
-  <script src="/js/config.js"></script>
+  <script src="./js/config.js"></script>
   <script>
     // Fix all href="#" data-pxy="URL" elements using configured proxy base
     document.addEventListener('DOMContentLoaded', function() {
@@ -601,8 +601,8 @@
       });
     });
   </script>
-  <script src="/js/themes.js"></script>
-  <script src="/js/achievements.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="./js/themes.js"></script>
+  <script src="./js/achievements.js"></script>
+  <script src="./js/app.js"></script>
 </body>
 </html>

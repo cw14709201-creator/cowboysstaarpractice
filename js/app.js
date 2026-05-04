@@ -332,9 +332,9 @@ async function loadAndRenderGames() {
   zones.forEach((zone) => {
     const raw = (zone.url || '').replace('{HTML_URL}', HTML_CDN).replace('{COVER_URL}', COVERS_CDN);
     if (!raw.startsWith('http')) return;
-    frag.appendChild(_makeGameLink(window.PROXY_BASE + raw, zone.name || zone.title || ('Game ' + zone.id), 'gnmath-' + zone.id, 'gn-math'));
+    frag.appendChild(_makeGameLink(window.PROXY_BASE ? window.PROXY_BASE + raw : raw, zone.name || zone.title || ('Game ' + zone.id), 'gnmath-' + zone.id, 'gn-math', raw));
   });
-  unique.forEach((g) => frag.appendChild(_makeGameLink(window.PROXY_BASE + g.url, g.name, g.gameId, 'truffled')));
+  unique.forEach((g) => frag.appendChild(_makeGameLink(window.PROXY_BASE ? window.PROXY_BASE + g.url : g.url, g.name, g.gameId, 'truffled', g.url)));
   list.appendChild(frag);
 
   // Wire filter input + source tabs
@@ -413,11 +413,12 @@ function applyGameFilter() {
     if (!q) return;
     const target = isUrl(q)
       ? (/^https?:\/\//i.test(q) ? q : 'https://' + q)
-      : getSearchUrl(q); // uses selected engine; falls back to Google if fn not yet defined
+      : getSearchUrl(q);
     addRecent(target, q);
     const openIn = getLinkTarget();
-    if (openIn === '_blank') window.open(window.PROXY_BASE + target, '_blank');
-    else window.location.href = window.PROXY_BASE + target;
+    const dest = window.PROXY_BASE ? window.PROXY_BASE + target : target;
+    if (openIn === '_blank' || !window.PROXY_BASE) window.open(dest, '_blank');
+    else window.location.href = dest;
   }
 
   input.addEventListener('keydown', (e) => {
@@ -1125,6 +1126,12 @@ function playGame(game) {
 
   const fsDefault = localStorage.getItem(FS_DEFAULT_KEY) === 'on';
   const finalHref = fsDefault ? href + '&fs=1' : href;
+
+  // If no proxy configured, open game URL directly
+  if (!window.PROXY_BASE) {
+    const rawUrl = game.rawUrl || '';
+    if (rawUrl) { window.open(rawUrl, '_blank'); return; }
+  }
 
   const linkTarget = getLinkTarget ? getLinkTarget() : '_self';
   if (linkTarget === '_blank') window.open(finalHref, '_blank');

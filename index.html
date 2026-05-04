@@ -578,12 +578,12 @@
   <script>
     // Fix all href="#" data-pxy="URL" elements using configured proxy base
     document.addEventListener('DOMContentLoaded', function() {
-      var base = window.PROXY_BASE || '/p/';
+      var base = window.PROXY_BASE || '';
       document.querySelectorAll('[data-pxy]').forEach(function(el) {
         var url = el.dataset.pxy;
         if (!url) return;
-        el.href = base + url;
-        // Remove data-pxy so it doesn't interfere
+        el.href = base ? base + url : url;
+        if (!base) el.target = '_blank';
         el.removeAttribute('data-pxy');
       });
     });

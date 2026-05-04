@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>retro — cowboysstuff</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg,#080808); color: var(--white,#f5f5f0); font-family: 'Share Tech Mono', monospace; overflow-x: hidden; }
+
+    #bar {
+      position: fixed; top: 0; left: 0; right: 0; height: 42px; z-index: 9999;
+      background: rgba(8,8,8,.95); border-bottom: 1px solid #1e1e1e;
+      display: flex; align-items: center; gap: 6px; padding: 0 14px;
+    }
+    .bar-title { color: #d4a017; font-size: 11px; white-space: nowrap; }
+    .btn {
+      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px;
+      color: #aaa; cursor: pointer; height: 27px; padding: 0 10px;
+      font-family: inherit; font-size: 12px; transition: color .14s, border-color .14s; flex-shrink: 0;
+    }
+    .btn:hover { color: #d4a017; border-color: #9a7412; }
+    .sep { width: 1px; height: 18px; background: #2a2a2a; flex-shrink: 0; }
+
+    #main { padding-top: 42px; display: flex; height: 100vh; }
+
+    /* ── Sidebar ── */
+    #sidebar { width: 260px; min-width: 260px; border-right: 1px solid #1a1a1a; overflow-y: auto; background: #0c0c0c; }
+    #sidebar::-webkit-scrollbar { width: 4px; }
+    #sidebar::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+    .sidebar-header { padding: 12px 14px 8px; font-size: 10px; color: #555; letter-spacing:.1em; text-transform:uppercase; border-bottom: 1px solid #1a1a1a; }
+
+    #game-search-r { display:block; width:100%; background:#111; border:none; border-bottom:1px solid #1a1a1a; color:#f5f5f0; padding:8px 14px; font-family:inherit; font-size:12px; outline:none; caret-color:#d4a017; }
+    #game-search-r::placeholder { color:#444; }
+
+    .console-section { border-bottom: 1px solid #141414; }
+    .console-label { padding: 8px 14px 4px; font-size: 10px; color: #555; letter-spacing:.08em; text-transform:uppercase; display:flex; align-items:center; gap:6px; }
+    .console-label .badge { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:10px; padding:1px 7px; font-size:9px; color:#666; }
+    .game-item { display:flex; align-items:center; padding:7px 14px; cursor:pointer; transition:background .12s; gap:8px; user-select:none; }
+    .game-item:hover { background:#161616; }
+    .game-item.active { background:#1c1a12; }
+    .game-item-name { font-size:12px; color:#ccc; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .game-item.active .game-item-name { color:#d4a017; }
+    .fav-btn { background:none; border:none; cursor:pointer; font-size:13px; padding:0; opacity:.35; transition:opacity .14s; }
+    .fav-btn:hover, .fav-btn.on { opacity:1; }
+
+    /* ── Player area ── */
+    #player-area { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+
+    #welcome { text-align:center; opacity:.35; user-select:none; }
+    #welcome h2 { font-size:1.8rem; margin-bottom:8px; }
+    #welcome p { font-size:.85rem; }
+
+    #emu-container { width:100%; height:100%; display:none; }
+
+    #game-info {
+      position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+      background:rgba(0,0,0,.75); backdrop-filter:blur(8px); border:1px solid #2a2a2a;
+      border-radius:10px; padding:8px 16px; font-size:11px; color:#888;
+      white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .3s;
+    }
+    #game-info.show { opacity:1; }
+    #game-info b { color:#d4a017; }
+
+    @media (max-width:600px) {
+      #sidebar { display:none; position:fixed; top:42px; left:0; bottom:0; z-index:500; }
+      #sidebar.open { display:block; }
+      #sidebar-toggle { display:inline-flex !important; }
+    }
+    #sidebar-toggle { display:none; }
+  </style>
+
+  <script src="./js/config.js"></script>
+  <script>
+    /* Inherit theme from main site */
+    (function(){
+      var t=localStorage.getItem('cowboysstuff_theme');
+      var themes={'cowboy':{'--gold':'#d4a017','--bg':'#080808','--surface':'#121212','--border':'#2a2a2a','--white':'#f5f5f0','--muted':'#666'},
+        'neon':{'--gold':'#c084fc','--bg':'#0a0510','--surface':'#130b1f','--border':'#3b1d6e','--white':'#f0e8ff','--muted':'#7c5cbf'},
+        'ocean':{'--gold':'#38bdf8','--bg':'#050d14','--surface':'#0a1929','--border':'#1e4060','--white':'#e0f0ff','--muted':'#4a7fa0'},
+        'crimson':{'--gold':'#f87171','--bg':'#0d0505','--surface':'#1a0a0a','--border':'#4a1818','--white':'#fff0f0','--muted':'#9a5555'},
+        'matrix':{'--gold':'#4ade80','--bg':'#020d05','--surface':'#061510','--border':'#14502a','--white':'#e0ffe8','--muted':'#3a7a50'},
+        'midnight':{'--gold':'#94a3b8','--bg':'#020204','--surface':'#0a0a12','--border':'#1e1e2e','--white':'#e2e8f0','--muted':'#4a4a6a'}
+      };
+      var m=new Date().getMonth();
+      if(t==='seasonal')t=m>=2&&m<=3?'matrix':m>=4&&m<=7?'ocean':m>=8&&m<=9?'cowboy':'crimson';
+      var vars=themes[t]||themes['cowboy'];
+      for(var k in vars)document.documentElement.style.setProperty(k,vars[k]);
+    })();
+  </script>
+</head>
+<body>
+
+<div id="bar">
+  <span class="bar-title">🕹 retro</span>
+  <div class="sep"></div>
+  <button class="btn" id="sidebar-toggle" style="display:none">☰</button>
+  <button class="btn" id="btn-fav" style="display:none">♡ fav</button>
+  <button class="btn" id="btn-save" style="display:none" title="Save state (F2)">💾 save</button>
+  <button class="btn" id="btn-load" style="display:none" title="Load state (F4)">📂 load</button>
+  <button class="btn" id="btn-fullscreen" title="Fullscreen (F)">⛶</button>
+  <button class="btn" id="btn-home" title="Home">⌂ home</button>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="sidebar-header">🕹 Retro Consoles</div>
+    <input id="game-search-r" placeholder="search games..." autocomplete="off" spellcheck="false" />
+    <div id="game-list"></div>
+  </div>
+
+  <div id="player-area">
+    <div id="welcome">
+      <h2>🕹</h2>
+      <p>pick a game from the list</p>
+    </div>
+    <div id="emu-container"></div>
+    <div id="game-info"></div>
+  </div>
+</div>
+
+<script>
+/* ── Retro game library ──
+   ROMs sourced from archive.org and other public-domain/homebrew sources.
+   Only legally distributable content (homebrew, PD, or archive.org licensed). */
+const RETRO_GAMES = [
+  /* NES */
+  { id:'nes-cavestory', name:'Cave Story NES Port', console:'NES', core:'nes',
+    url:'https://archive.org/download/nes-homebrew-games/cavestory.nes' },
+  { id:'nes-mariobros', name:'Mario Bros',          console:'NES', core:'nes',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Nintendo%20-%20Nintendo%20Entertainment%20System.zip/Mario%20Bros.%20(World).nes' },
+  { id:'nes-pacman',    name:'Pac-Man',             console:'NES', core:'nes',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Nintendo%20-%20Nintendo%20Entertainment%20System.zip/Pac-Man%20(USA)%20(Namco).nes' },
+  { id:'nes-battlekid', name:'Battle Kid (Homebrew)', console:'NES', core:'nes',
+    url:'https://archive.org/download/battlekid/battlekid.nes' },
+  { id:'nes-drmd',      name:'Driar (Homebrew)',    console:'NES', core:'nes',
+    url:'https://archive.org/download/nes-homebrew-games/driar.nes' },
+
+  /* SNES */
+  { id:'snes-aladdin',  name:'Super Aladdin',       console:'SNES', core:'snes9x',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.zip/Aladdin%20(USA).sfc' },
+  { id:'snes-sf2',      name:'Street Fighter II',   console:'SNES', core:'snes9x',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.zip/Street%20Fighter%20II%20-%20The%20World%20Warrior%20(USA).sfc' },
+  { id:'snes-tetris',   name:'Tetris & Dr. Mario',  console:'SNES', core:'snes9x',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.zip/Tetris%20%26%20Dr.%20Mario%20(USA).sfc' },
+  { id:'snes-kirby',    name:'Kirby Superstar',     console:'SNES', core:'snes9x',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.zip/Kirby%20Super%20Star%20(USA).sfc' },
+
+  /* GBA */
+  { id:'gba-vba',       name:'Nessie Demo (Homebrew)', console:'GBA', core:'gba',
+    url:'https://archive.org/download/gba-homebrew-collection/nessie.gba' },
+  { id:'gba-pocket',    name:'Pocket Puzzle (Homebrew)', console:'GBA', core:'gba',
+    url:'https://archive.org/download/gba-homebrew-collection/pocket_puzzle.gba' },
+
+  /* Sega Genesis */
+  { id:'gen-sonic',     name:'Sonic The Hedgehog',  console:'Genesis', core:'segaMD',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Sega%20-%20Mega%20Drive%20-%20Genesis.zip/Sonic%20the%20Hedgehog%20(World).md' },
+  { id:'gen-streets',   name:'Streets of Rage',     console:'Genesis', core:'segaMD',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Sega%20-%20Mega%20Drive%20-%20Genesis.zip/Streets%20of%20Rage%20(USA%2C%20Europe).md' },
+  { id:'gen-vectorman', name:'Vectorman',            console:'Genesis', core:'segaMD',
+    url:'https://archive.org/download/No-Intro-Collection_2016-01-03_Fixed/Sega%20-%20Mega%20Drive%20-%20Genesis.zip/Vectorman%20(USA).md' },
+
+  /* Atari 2600 (public domain) */
+  { id:'at-adventure',  name:'Adventure',           console:'Atari 2600', core:'atari2600',
+    url:'https://archive.org/download/Atari2600ClassicsCollection/adventure.a26' },
+  { id:'at-breakout',   name:'Breakout',            console:'Atari 2600', core:'atari2600',
+    url:'https://archive.org/download/Atari2600ClassicsCollection/breakout.a26' },
+];
+
+const FAV_KEY      = 'cowboysstuff_retro_favs';
+const PLAYS_PREFIX = 'cowboysstuff_plays_retro_';
+const PTIME_PREFIX = 'cowboysstuff_ptime_retro_';
+
+let currentGame = null;
+let playStart   = null;
+let filterQuery = '';
+let emuLoaded   = false;
+
+function getFavs()  { try{return new Set(JSON.parse(localStorage.getItem(FAV_KEY)||'[]'));}catch{return new Set();} }
+function saveFavs(s){ localStorage.setItem(FAV_KEY, JSON.stringify([...s])); }
+function getPlays(id){ return parseInt(localStorage.getItem(PLAYS_PREFIX+id)||'0',10); }
+function getPtime(id){ return parseInt(localStorage.getItem(PTIME_PREFIX+id)||'0',10); }
+function addPtime(id,sec){ localStorage.setItem(PTIME_PREFIX+id, getPtime(id)+Math.round(sec)); }
+
+function buildSidebar() {
+  const list = document.getElementById('game-list');
+  const favs = getFavs();
+  const q    = filterQuery.toLowerCase();
+  const filtered = RETRO_GAMES.filter(g => !q || g.name.toLowerCase().includes(q) || g.console.toLowerCase().includes(q));
+
+  const consoles = {};
+  filtered.forEach(g => { if (!consoles[g.console]) consoles[g.console] = []; consoles[g.console].push(g); });
+
+  list.innerHTML = '';
+  if (!filtered.length) { list.innerHTML = '<div style="padding:14px;font-size:12px;color:#555">no games found</div>'; return; }
+
+  const favGames = filtered.filter(g => favs.has(g.id));
+  if (favGames.length) {
+    const sec = document.createElement('div'); sec.className = 'console-section';
+    sec.innerHTML = `<div class="console-label">♥ Favourites <span class="badge">${favGames.length}</span></div>`;
+    favGames.forEach(g => sec.appendChild(makeItem(g, favs)));
+    list.appendChild(sec);
+  }
+
+  Object.entries(consoles).forEach(([con, games]) => {
+    const sec = document.createElement('div'); sec.className = 'console-section';
+    sec.innerHTML = `<div class="console-label">${con} <span class="badge">${games.length}</span></div>`;
+    games.forEach(g => sec.appendChild(makeItem(g, favs)));
+    list.appendChild(sec);
+  });
+}
+
+function makeItem(game, favs) {
+  const div = document.createElement('div');
+  div.className = 'game-item' + (currentGame?.id === game.id ? ' active' : '');
+
+  const name = document.createElement('span'); name.className = 'game-item-name'; name.textContent = game.name;
+  const fav  = document.createElement('button');
+  fav.className = 'fav-btn' + (favs.has(game.id) ? ' on' : '');
+  fav.textContent = favs.has(game.id) ? '♥' : '♡';
+
+  fav.addEventListener('click', e => {
+    e.stopPropagation();
+    const f = getFavs();
+    if (f.has(game.id)) f.delete(game.id); else f.add(game.id);
+    saveFavs(f); buildSidebar();
+  });
+
+  div.appendChild(name); div.appendChild(fav);
+  div.addEventListener('click', () => loadGame(game));
+  return div;
+}
+
+function loadGame(game) {
+  if (playStart && currentGame) addPtime(currentGame.id, (Date.now()-playStart)/1000);
+  currentGame = game;
+  playStart   = Date.now();
+  localStorage.setItem(PLAYS_PREFIX + game.id, getPlays(game.id) + 1);
+
+  document.getElementById('welcome').style.display = 'none';
+  const container = document.getElementById('emu-container');
+  container.style.display = 'block';
+  container.innerHTML = '';
+
+  // EmulatorJS setup
+  window.EJS_player    = '#emu-container';
+  window.EJS_gameUrl   = game.url;
+  window.EJS_core      = game.core;
+  window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+  window.EJS_Buttons   = { saveState: true, loadState: true, fullscreen: true, screenshot: true };
+
+  // Create player div
+  const playerDiv = document.createElement('div');
+  playerDiv.id = 'emu-container';
+  playerDiv.style.cssText = 'width:100%;height:100%;';
+  container.appendChild(playerDiv);
+
+  // Load EmulatorJS
+  if (!emuLoaded) {
+    emuLoaded = true;
+    const s = document.createElement('script');
+    s.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+    document.head.appendChild(s);
+  } else {
+    // Re-init if already loaded
+    if (window.EJS_GameManager) {
+      try { new window.EJS_GameManager(); } catch(e) {}
+    }
+  }
+
+  // Controls visibility
+  document.getElementById('btn-fav').style.display = '';
+  document.getElementById('btn-save').style.display = '';
+  document.getElementById('btn-load').style.display = '';
+  updateFavBtn();
+
+  const plays = getPlays(game.id);
+  const pt    = getPtime(game.id);
+  const info  = document.getElementById('game-info');
+  info.innerHTML = `<b>${game.name}</b> [${game.console}] · ${plays} plays · ${Math.round(pt/60)}m played`;
+  info.classList.add('show');
+  setTimeout(() => info.classList.remove('show'), 3500);
+
+  buildSidebar();
+  document.title = game.name + ' — cowboysstuff retro';
+}
+
+function updateFavBtn() {
+  if (!currentGame) return;
+  const f   = getFavs();
+  const btn = document.getElementById('btn-fav');
+  btn.textContent   = f.has(currentGame.id) ? '♥ faved' : '♡ fav';
+  btn.dataset.id    = currentGame.id;
+}
+
+document.getElementById('btn-fav').addEventListener('click', () => {
+  if (!currentGame) return;
+  const f = getFavs();
+  if (f.has(currentGame.id)) f.delete(currentGame.id); else f.add(currentGame.id);
+  saveFavs(f); updateFavBtn(); buildSidebar();
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  try { window.EJS_emulator?.saveState(); toast('state saved'); } catch(e) { toast('save failed'); }
+});
+document.getElementById('btn-load').addEventListener('click', () => {
+  try { window.EJS_emulator?.loadState(); toast('state loaded'); } catch(e) { toast('load failed'); }
+});
+document.getElementById('btn-fullscreen').addEventListener('click', () => {
+  const el = document.getElementById('player-area');
+  (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el);
+});
+document.getElementById('btn-home').addEventListener('click', () => window.location.href = '/');
+document.getElementById('sidebar-toggle').addEventListener('click', () =>
+  document.getElementById('sidebar').classList.toggle('open')
+);
+document.getElementById('game-search-r').addEventListener('input', e => {
+  filterQuery = e.target.value; buildSidebar();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'f' || e.key === 'F') document.getElementById('btn-fullscreen').click();
+  if (e.key === 'F2') document.getElementById('btn-save').click();
+  if (e.key === 'F4') document.getElementById('btn-load').click();
+});
+
+window.addEventListener('beforeunload', () => {
+  if (playStart && currentGame) addPtime(currentGame.id, (Date.now()-playStart)/1000);
+});
+
+function toast(msg) {
+  let el = document.getElementById('_toast');
+  if (!el) {
+    el = document.createElement('div'); el.id = '_toast';
+    el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;padding:6px 16px;font-size:12px;color:#f5f5f0;z-index:9999;pointer-events:none;transition:opacity .2s';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg; el.style.opacity = '1';
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = '0', 1800);
+}
+
+buildSidebar();
+</script>
+</body>
+</html>

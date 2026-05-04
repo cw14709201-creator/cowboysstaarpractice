@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>game — cowboysstuff</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+    }
+
+    /* ── Top control bar ── */
+    #bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 42px;
+      background: rgba(8,8,8,0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid #1e1e1e;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      z-index: 9999;
+      transform: translateY(-100%);
+      transition: transform 0.22s ease;
+    }
+
+    /* Show bar on hover over top 60px */
+    #hover-zone {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 60px;
+      z-index: 9998;
+    }
+
+    #hover-zone:hover ~ #bar,
+    #bar:hover,
+    #bar:focus-within {
+      transform: translateY(0);
+    }
+
+    .btn {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 5px;
+      color: #aaa;
+      cursor: pointer;
+      height: 27px;
+      padding: 0 9px;
+      font-family: inherit;
+      font-size: 12px;
+      white-space: nowrap;
+      transition: color .14s, border-color .14s, background .14s;
+      flex-shrink: 0;
+    }
+    .btn:hover { color: #d4a017; border-color: #9a7412; }
+    .btn:active { background: #2a2a2a; }
+
+    .bar-title {
+      font-size: 11px;
+      color: #d4a017;
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sep { width: 1px; height: 20px; background: #2a2a2a; flex-shrink: 0; }
+
+    /* Resolution selector */
+    #res-select {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 5px;
+      color: #aaa;
+      height: 27px;
+      padding: 0 6px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .14s;
+    }
+    #res-select:focus, #res-select:hover { border-color: #9a7412; color: #d4a017; }
+
+    label.res-label {
+      font-size: 11px;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    /* FPS badge */
+    #fps-badge {
+      font-size: 10px;
+      color: #444;
+      min-width: 44px;
+      text-align: right;
+    }
+
+    /* ── Game container ── */
+    #game-wrap {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0a0a0a;
+    }
+
+    #game-scaler {
+      transform-origin: center center;
+      /* Size set by JS */
+    }
+
+    #game-frame {
+      display: block;
+      border: none;
+      background: #000;
+    }
+
+    /* Loading overlay */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      z-index: 100;
+      font-size: 13px;
+      color: #555;
+      transition: opacity 0.4s;
+    }
+
+    #loading.hidden { opacity: 0; pointer-events: none; }
+
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid #222;
+      border-top-color: #d4a017;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* res indicator toast */
+    #res-toast {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(212,160,23,0.15);
+      border: 1px solid rgba(212,160,23,0.3);
+      border-radius: 20px;
+      padding: 5px 16px;
+      font-size: 12px;
+      color: #d4a017;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 10000;
+      white-space: nowrap;
+    }
+    #res-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="hover-zone"></div>
+
+  <div id="bar">
+    <span class="bar-title" id="game-title">loading...</span>
+    <div class="sep"></div>
+    <button class="btn" id="btn-back"    title="Back">←</button>
+    <button class="btn" id="btn-fwd"     title="Forward">→</button>
+    <button class="btn" id="btn-reload"  title="Reload game">↻</button>
+    <div class="sep"></div>
+    <label class="res-label">res</label>
+    <select id="res-select" title="Render resolution">
+      <option value="native">native</option>
+      <option value="1080">1080p</option>
+      <option value="720" selected>720p</option>
+      <option value="480">480p</option>
+      <option value="360">360p</option>
+      <option value="240">240p</option>
+      <option value="120">120p</option>
+    </select>
+    <span id="fps-badge">— fps</span>
+    <div class="sep"></div>
+    <button class="btn" id="btn-fullscreen" title="Fullscreen">⛶</button>
+    <button class="btn" id="btn-home" title="Back to cowboysstuff">⌂</button>
+  </div>
+
+  <div id="game-wrap">
+    <div id="game-scaler">
+      <iframe id="game-frame"
+              allowfullscreen
+              allow="fullscreen; autoplay; clipboard-write; encrypted-media"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock"
+      ></iframe>
+    </div>
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <span id="loading-text">loading game...</span>
+  </div>
+
+  <div id="res-toast"></div>
+
+  <script src="./js/config.js"></script>
+  <script>
+    /* ── Parse URL params ── */
+    const params = new URLSearchParams(location.search);
+    const gameUrl  = params.get('url')  || '';
+    const gameName = params.get('name') || 'game';
+
+    document.title = gameName + ' — cowboysstuff';
+    document.getElementById('game-title').textContent = gameName;
+    document.getElementById('loading-text').textContent = 'loading ' + gameName + '...';
+
+    const PROXY   = (window.PROXY_BASE || '/p/');
+    const frame   = document.getElementById('game-frame');
+    const scaler  = document.getElementById('game-scaler');
+    const resSel  = document.getElementById('res-select');
+    const loading = document.getElementById('loading');
+    const toast   = document.getElementById('res-toast');
+
+    /* Resolution map — height-based, 16:9 aspect ratio */
+    const RES = {
+      'native': null,
+      '1080':   { w: 1920, h: 1080 },
+      '720':    { w: 1280, h: 720  },
+      '480':    { w: 854,  h: 480  },
+      '360':    { w: 640,  h: 360  },
+      '240':    { w: 426,  h: 240  },
+      '120':    { w: 213,  h: 120  },
+    };
+
+    /* ── Load saved resolution preference ── */
+    const savedRes = localStorage.getItem('cowboysstuff_game_res') || '720';
+    resSel.value = savedRes;
+
+    function applyResolution(key) {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight - 0; // no top bar offset (bar is overlay)
+
+      if (!key || key === 'native') {
+        frame.style.width  = vw + 'px';
+        frame.style.height = vh + 'px';
+        scaler.style.transform = '';
+        return;
+      }
+
+      const res  = RES[key];
+      if (!res) return;
+
+      /* Scale to fill viewport while keeping aspect ratio */
+      const scaleX = vw  / res.w;
+      const scaleY = vh  / res.h;
+      const scale  = Math.min(scaleX, scaleY);
+
+      frame.style.width  = res.w + 'px';
+      frame.style.height = res.h + 'px';
+      scaler.style.transform = 'scale(' + scale + ')';
+    }
+
+    function showResToast(label) {
+      toast.textContent = label;
+      toast.classList.add('show');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toast.classList.remove('show'), 1400);
+    }
+
+    resSel.addEventListener('change', () => {
+      const key = resSel.value;
+      localStorage.setItem('cowboysstuff_game_res', key);
+      applyResolution(key);
+      const label = resSel.options[resSel.selectedIndex].text;
+      showResToast(label);
+    });
+
+    window.addEventListener('resize', () => applyResolution(resSel.value));
+
+    /* ── Fullscreen by default ── */
+    const fsDefault = params.get('fs') === '1' || localStorage.getItem('cowboysstuff_fs_default') === 'on';
+
+    /* ── Load the game ── */
+    if (gameUrl) {
+      const proxied = gameUrl.startsWith(PROXY) ? gameUrl : PROXY + gameUrl;
+      frame.src = proxied;
+      applyResolution(resSel.value);
+
+      frame.addEventListener('load', () => {
+        loading.classList.add('hidden');
+      }, { once: true });
+
+      /* Fallback: hide loading after 6s even if load event doesn't fire (sandboxed frames) */
+      setTimeout(() => loading.classList.add('hidden'), 6000);
+    } else {
+      document.getElementById('loading-text').textContent = 'no game URL provided';
+    }
+
+    /* ── Auto fullscreen ── */
+    if (gameUrl && fsDefault) {
+      frame.addEventListener('load', () => {
+        const el = document.getElementById('game-wrap');
+        (el.requestFullscreen || el.webkitRequestFullscreen || (()=>{})).call(el);
+      }, { once: true });
+    }
+
+    /* ── Playtime tracking ── */
+    const PTIME_KEY = 'cowboysstuff_ptime_' + (params.get('name') || gameUrl).replace(/[^a-z0-9]/gi,'-').slice(0,40);
+    let ptimeStart = Date.now();
+    function savePtime() {
+      const prev = parseInt(localStorage.getItem(PTIME_KEY)||'0',10);
+      localStorage.setItem(PTIME_KEY, prev + Math.round((Date.now()-ptimeStart)/1000));
+      ptimeStart = Date.now();
+    }
+    setInterval(savePtime, 30000); // save every 30s
+    window.addEventListener('beforeunload', savePtime);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) savePtime(); else ptimeStart = Date.now();
+    });
+
+    /* ── Control bar buttons ── */
+    document.getElementById('btn-back').addEventListener('click', () => history.back());
+    document.getElementById('btn-fwd').addEventListener('click',  () => history.forward());
+    document.getElementById('btn-reload').addEventListener('click', () => { frame.src = frame.src; loading.classList.remove('hidden'); });
+    document.getElementById('btn-fullscreen').addEventListener('click', () => {
+      (document.getElementById('game-wrap').requestFullscreen?.() ||
+       document.getElementById('game-wrap').webkitRequestFullscreen?.());
+    });
+    document.getElementById('btn-home').addEventListener('click', () => { window.location.href = '/'; });
+
+    /* ── FPS counter ── */
+    const fpsBadge = document.getElementById('fps-badge');
+    let   frames   = 0;
+    let   lastTime = performance.now();
+
+    function fpsLoop() {
+      frames++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        fpsBadge.textContent = frames + ' fps';
+        fpsBadge.style.color = frames >= 55 ? '#44aa44' : frames >= 30 ? '#aaaa44' : '#aa4444';
+        frames   = 0;
+        lastTime = now;
+      }
+      requestAnimationFrame(fpsLoop);
+    }
+    requestAnimationFrame(fpsLoop);
+
+
+    /* ── Mobile gamepad ── */
+    #gamepad {
+      display: none;
+      position: fixed;
+      bottom: 16px;
+      left: 0;
+      right: 0;
+      padding: 0 12px;
+      pointer-events: none;
+      z-index: 200;
+    }
+    @media (pointer: coarse) { #gamepad { display: flex; justify-content: space-between; align-items: flex-end; } }
+    #gamepad .gp-dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 52px);
+      grid-template-rows: repeat(3, 52px);
+      gap: 3px;
+      pointer-events: auto;
+    }
+    #gamepad .gp-face {
+      display: grid;
+      grid-template-columns: repeat(2, 52px);
+      grid-template-rows: repeat(2, 52px);
+      gap: 3px;
+      pointer-events: auto;
+    }
+    .gp-btn {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .1s;
+    }
+    .gp-btn:active, .gp-btn.pressed { background: rgba(212,160,23,0.35); border-color: rgba(212,160,23,0.5); }
+    .gp-btn.center { border-radius: 50%; background: rgba(255,255,255,0.06); font-size: 11px; color: rgba(255,255,255,0.4); }
+    .gp-empty { visibility: hidden; }
+    #gp-toggle {
+      position: fixed;
+      bottom: 56px;
+      right: 16px;
+      z-index: 201;
+      background: rgba(13,13,13,0.8);
+      border: 1px solid #2a2a2a;
+      border-radius: 20px;
+      color: #666;
+      cursor: pointer;
+      padding: 4px 10px;
+      font-size: 10px;
+      font-family: monospace;
+      display: none;
+    }
+    @media (pointer: coarse) { #gp-toggle { display: block; } }
+    /* ── Keyboard shortcuts ── */
+    document.addEventListener('keydown', (e) => {
+      if (document.activeElement === resSel) return;
+      if (e.key === 'Escape') window.location.href = '/';
+      if (e.key === 'f' || e.key === 'F') document.getElementById('btn-fullscreen').click();
+      if (e.key === 'r' || e.key === 'R') document.getElementById('btn-reload').click();
+    });
+  </script>
+
+  <!-- Mobile on-screen gamepad -->
+  <button id="gp-toggle">🎮 pad</button>
+  <div id="gamepad">
+    <div class="gp-dpad">
+      <div class="gp-empty"></div>
+      <button class="gp-btn" data-key="ArrowUp">▲</button>
+      <div class="gp-empty"></div>
+      <button class="gp-btn" data-key="ArrowLeft">◀</button>
+      <button class="gp-btn center" data-key="Escape">●</button>
+      <button class="gp-btn" data-key="ArrowRight">▶</button>
+      <div class="gp-empty"></div>
+      <button class="gp-btn" data-key="ArrowDown">▼</button>
+      <div class="gp-empty"></div>
+    </div>
+    <div class="gp-face">
+      <button class="gp-btn" data-key="x" style="color:#5ba4ff">X</button>
+      <button class="gp-btn" data-key="z" style="color:#ff5b5b">A</button>
+      <button class="gp-btn" data-key="Enter">S</button>
+      <button class="gp-btn" data-key=" ">B</button>
+    </div>
+  </div>
+
+  <script>
+
+  /* ── Mobile gamepad events ── */
+  (function initGamepad() {
+    const gp      = document.getElementById('gamepad');
+    const toggle  = document.getElementById('gp-toggle');
+    let gpVisible = true;
+
+    toggle.addEventListener('click', () => {
+      gpVisible = !gpVisible;
+      gp.style.display = gpVisible ? '' : 'none';
+      toggle.textContent = gpVisible ? '🎮 pad' : '🎮 show';
+    });
+
+    function sendKey(el, type) {
+      const key = el.dataset.key;
+      if (!key) return;
+      el.classList.toggle('pressed', type === 'keydown');
+      const code = key.length === 1 ? 'Key' + key.toUpperCase()
+        : key === ' ' ? 'Space'
+        : key === 'Enter' ? 'Enter'
+        : key;
+      const ev = new KeyboardEvent(type, {
+        key, code, bubbles: true, cancelable: true,
+        keyCode: key === ' ' ? 32 : key.charCodeAt?.(0) || 0,
+      });
+      try { frame.contentDocument?.dispatchEvent(ev); } catch (_) {}
+      try { frame.contentWindow?.dispatchEvent(ev); } catch (_) {}
+      document.dispatchEvent(ev);
+    }
+
+    gp.querySelectorAll('.gp-btn').forEach(btn => {
+      btn.addEventListener('touchstart', e => { e.preventDefault(); sendKey(btn, 'keydown'); }, { passive: false });
+      btn.addEventListener('touchend',   e => { e.preventDefault(); sendKey(btn, 'keyup');   }, { passive: false });
+      btn.addEventListener('mousedown',  e => sendKey(btn, 'keydown'));
+      btn.addEventListener('mouseup',    e => sendKey(btn, 'keyup'));
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cowboysstuff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rye&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./css/style.css" />
+  <!-- Apply no-anim immediately to avoid flash of animations for users who disabled them -->
+  <script>if(localStorage.getItem('cowboysstuff_anim')==='off')document.documentElement.classList.add('no-anim');</script>
+</head>
+<body>
+
+
+  <!-- BOSS KEY OVERLAY — instant fake Google Docs cover -->
+  <div id="boss-overlay" hidden aria-hidden="true">
+    <div id="boss-topbar">
+      <div id="boss-logo">
+        <svg width="40" height="40" viewBox="0 0 40 40"><rect width="40" height="40" rx="4" fill="#4285F4"/><text x="20" y="28" text-anchor="middle" fill="white" font-size="22" font-family="Arial">D</text></svg>
+        <span id="boss-title-text">Untitled document</span>
+      </div>
+      <div id="boss-menu">
+        <span>File</span><span>Edit</span><span>View</span><span>Insert</span><span>Format</span><span>Tools</span>
+      </div>
+    </div>
+    <div id="boss-toolbar">
+      <div class="boss-btn">100%</div>
+      <div class="boss-sep"></div>
+      <div class="boss-btn">Normal text</div>
+      <div class="boss-sep"></div>
+      <div class="boss-btn boss-bold">B</div>
+      <div class="boss-btn boss-italic">I</div>
+      <div class="boss-btn boss-underline">U</div>
+    </div>
+    <div id="boss-body">
+      <div id="boss-page">
+        <div id="boss-cursor-area" contenteditable="true" spellcheck="false"></div>
+      </div>
+    </div>
+    <div id="boss-hint">press <kbd>`</kbd> to return</div>
+  </div>
+  <!-- PARTICLE CANVAS -->
+  <canvas id="particles" aria-hidden="true"></canvas>
+
+  <!-- LOADING SCREEN -->
+  <div id="loading-screen" aria-hidden="true">
+    <div class="ls-inner">
+      <img src="./loading.png" class="ls-img" alt="" draggable="false" />
+      <p class="ls-msg" id="ls-msg">loading...</p>
+    </div>
+  </div>
+
+  <!-- UPDATE MODAL -->
+  <div id="update-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <p class="modal-welcome">welcome / welcome back!</p>
+      <p class="modal-update-label">a new update was released!</p>
+      <div class="modal-version-badge">cowboysstuff v1.0</div>
+      <div class="modal-changes">
+        <p class="modal-changes-label">added:</p>
+        <ul class="modal-changes-list">
+          <li>web proxy with browser controls</li>
+          <li>gn-math + truffled games</li>
+          <li>recent sites history</li>
+          <li>panic button</li>
+          <li>tab cloaking</li>
+        </ul>
+      </div>
+      <button id="modal-close" class="modal-btn">ok</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box settings-box">
+      <p class="modal-welcome">settings</p>
+
+      <div class="settings-row">
+        <label class="settings-label">tab cloak title</label>
+        <input id="cloak-title" class="settings-input" type="text" placeholder="Google Docs" autocomplete="off" />
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">tab cloak url</label>
+        <input id="cloak-url" class="settings-input" type="text" placeholder="https://docs.google.com" autocomplete="off" />
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">panic key</label>
+        <kbd class="settings-kbd">Shift + Esc</kbd>
+        <span class="settings-note">navigates to cloak url</span>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">animations</label>
+        <button class="settings-toggle" id="anim-toggle" aria-label="Toggle animations">
+          <span class="toggle-thumb"></span>
+        </button>
+        <span class="settings-note" id="anim-note"></span>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">clear history</label>
+        <button id="clear-history-btn" class="settings-action-btn">clear recent sites</button>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">reset counters</label>
+        <button id="reset-counters-btn" class="settings-action-btn">reset play counts</button>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">font size</label>
+        <input id="font-size-range" type="range" min="12" max="18" step="1" value="14" style="flex:1;accent-color:var(--gold)" />
+        <span id="font-size-val" style="font-family:var(--font-mono);font-size:.78rem;color:var(--muted);min-width:30px;text-align:right">14px</span>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">fullscreen by default</label>
+        <button class="settings-toggle" id="fs-default-toggle" aria-label="Toggle fullscreen default">
+          <span class="toggle-thumb"></span>
+        </button>
+        <span class="settings-note">games open fullscreen</span>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">proxy cache</label>
+        <button id="clear-cache-btn" class="settings-action-btn">clear cache</button>
+        <span class="settings-note" id="cache-stats"></span>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">search engine</label>
+        <select id="search-engine-select" class="settings-input" style="flex:none;width:auto">
+          <option value="google">Google</option>
+          <option value="ddg">DuckDuckGo</option>
+          <option value="bing">Bing</option>
+          <option value="brave">Brave</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">open links in</label>
+        <select id="link-target-select" class="settings-input" style="flex:none;width:auto">
+          <option value="_self">same tab</option>
+          <option value="_blank">new tab</option>
+        </select>
+      </div>
+
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <label class="settings-label">theme</label>
+        <div id="theme-picker-container" class="theme-picker"></div>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label">backup data</label>
+        <button id="export-data-btn" class="settings-action-btn">export</button>
+        <button id="import-data-btn" class="settings-action-btn">import</button>
+        <input id="import-data-file" type="file" accept=".json" style="display:none" />
+      </div>
+      <div class="settings-footer">
+        <span class="settings-note">press <kbd>?</kbd> anywhere for keyboard shortcuts</span>
+      </div>
+
+      <button id="settings-close" class="modal-btn" style="margin-top:20px">done</button>
+    </div>
+  </div>
+
+  <!-- KEYBOARD SHORTCUTS MODAL -->
+  <div id="shortcuts-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <p class="modal-welcome">keyboard shortcuts</p>
+      <table class="shortcut-table">
+        <tr><td><kbd>/</kbd></td><td>focus search</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>close panel / modal</td></tr>
+        <tr><td><kbd>?</kbd></td><td>show shortcuts</td></tr>
+        <tr><td><kbd>Shift+Esc</kbd></td><td>panic — go to cloak url</td></tr>
+        <tr><td><kbd>G</kbd></td><td>open games</td></tr>
+        <tr><td><kbd>A</kbd></td><td>open apps</td></tr>
+        <tr><td><kbd>E</kbd></td><td>open extra</td></tr>
+        <tr><td><kbd>H</kbd></td><td>go home</td></tr>
+        <tr><td><kbd>N</kbd></td><td>open in new tab (panels)</td></tr>
+        <tr><td><kbd>K</kbd></td><td>achievements</td></tr>
+        <tr><td><kbd>C</kbd></td><td>collections</td></tr>
+        <tr><td><kbd>L</kbd></td><td>leaderboard</td></tr>
+        <tr><td><kbd>1-9</kbd></td><td>open Nth game in list</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>cycle through game cards</td></tr>
+        <tr><td><kbd>M</kbd></td><td>open most-played game</td></tr>
+        <tr><td><kbd>`</kbd></td><td>boss key (fake google docs)</td></tr>
+        <tr><td><kbd>kromp</kbd></td><td>???</td></tr>
+      </table>
+      <button id="shortcuts-close" class="modal-btn" style="margin-top:20px">ok</button>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app">
+
+    <!-- NAV BAR -->
+    <nav class="navbar" role="navigation">
+      <button class="nav-logo-btn" id="home-btn" title="Home" aria-label="Home">
+        <img src="./kromp.png" class="kromp-logo" alt="kromp" draggable="false" />
+      </button>
+
+      <div class="nav-icons">
+        <a class="nav-icon-btn" href="./flash.html" title="Flash games (⚡)" aria-label="Flash">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </a>
+        <a class="nav-icon-btn" href="./retro.html" title="Retro console games (🕹)" aria-label="Retro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="2" y="6" width="20" height="12" rx="3"/>
+            <path d="M6 10v4M8 12h-4M14 11h4M14 13h4"/>
+          </svg>
+        </a>
+        <button class="nav-icon-btn" id="nav-games" title="Games (G)" aria-label="Games">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="2" y="6" width="20" height="13" rx="4"/>
+            <path d="M6 12.5h5M8.5 10v5"/>
+            <circle cx="17" cy="12.5" r="1.2" fill="currentColor" stroke="none"/>
+            <circle cx="14" cy="12.5" r="1.2" fill="currentColor" stroke="none" opacity=".45"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="nav-apps" title="Apps (A)" aria-label="Apps">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3" y="3" width="8" height="8" rx="1.5"/>
+            <rect x="13" y="3" width="8" height="8" rx="1.5"/>
+            <rect x="3" y="13" width="8" height="8" rx="1.5"/>
+            <rect x="13" y="13" width="8" height="8" rx="1.5"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="nav-extra" title="Extra (E)" aria-label="Extra">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
+            <path d="M12 4v16M4 12h16"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="nav-achievements" title="Achievements (K)" aria-label="Achievements">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="nav-collections" title="Collections (C)" aria-label="Collections">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M19 11H5M19 6H5M19 16H5M19 21H5"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="nav-anim-toggle" title="Toggle animations" aria-label="Toggle animations">
+          <svg id="nav-anim-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M5 3l14 9-14 9V3z"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="settings-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <main class="hero" id="main-hero">
+      <div class="hero-inner">
+
+        <!-- Kromp logo hero -->
+        <div class="hero-logo-wrap">
+          <img src="./kromp.png" class="hero-logo" alt="kromp" draggable="false" />
+        </div>
+
+        <h1 class="site-title">cowboysstuff</h1>
+
+        <!-- Daily Featured Game -->
+        <div id="featured-wrap" hidden>
+          <div class="featured-card" id="featured-card">
+            <div class="featured-label">today's pick</div>
+            <div class="featured-name" id="featured-name"></div>
+            <button class="featured-play" id="featured-play">▶ play</button>
+          </div>
+        </div>
+
+        <!-- Resume chip + session timer -->
+        <div id="resume-row">
+          <div id="resume-chip" hidden>
+            <span id="resume-label"></span>
+            <button id="resume-btn">resume</button>
+            <button id="resume-dismiss">✕</button>
+          </div>
+          <div id="session-timer" hidden>
+            <span id="session-label">session</span>
+            <span id="session-time">0:00</span>
+          </div>
+        </div>
+
+        <!-- App Icon Grid — direct proxy links -->
+        <div class="icon-grid app-grid">
+
+          <!-- Movies / SpenFlix — full-screen proxy -->
+          <a class="icon-card app-card" href="./watch.html" aria-label="Movies">
+            <div class="icon-face movies-face">
+              <!-- Film/play icon -->
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="4" width="40" height="40" rx="10" fill="#5b2b8a"/>
+                <polygon points="18,14 36,24 18,34" fill="white"/>
+              </svg>
+            </div>
+            <span class="icon-label">movies</span>
+          </a>
+
+          <!-- TikTok -->
+          <a class="icon-card app-card" href="#" data-pxy="https://www.tiktok.com/" aria-label="TikTok">
+            <div class="icon-face tiktok-face">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="4" width="40" height="40" rx="10" fill="#010101"/>
+                <!-- TikTok note shape -->
+                <path d="M30 10c0 5 4 8 8 8v5c-3 0-6-1-8-3v13c0 6-5 11-11 11s-11-5-11-11 5-11 11-11v5c-3 0-6 3-6 6s3 6 6 6 6-3 6-6V10h5z" fill="white"/>
+                <path d="M33 10c0 5 4 8 8 8v5c-3 0-6-1-8-3v13c0 6-5 11-11 11s-11-5-11-11 5-11 11-11v5c-3 0-6 3-6 6s3 6 6 6 6-3 6-6V10h5z" fill="#69C9D0" opacity="0.7"/>
+              </svg>
+            </div>
+            <span class="icon-label">tiktok</span>
+          </a>
+
+          <!-- Twitch -->
+          <a class="icon-card app-card" href="#" data-pxy="https://www.twitch.tv/" aria-label="Twitch">
+            <div class="icon-face twitch-face">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="4" width="40" height="40" rx="10" fill="#6441a5"/>
+                <!-- Twitch logo mark -->
+                <path d="M14 10l-4 4v24h8v6l6-6h5l9-9V10H14zm18 17l-5 5h-5l-4 4v-4h-6V13h20v14z" fill="white"/>
+                <rect x="25" y="17" width="3" height="8" rx="1.5" fill="white"/>
+                <rect x="32" y="17" width="3" height="8" rx="1.5" fill="white"/>
+              </svg>
+            </div>
+            <span class="icon-label">twitch</span>
+          </a>
+
+          <!-- YouTube -->
+          <a class="icon-card app-card" href="#" data-pxy="https://www.youtube.com/" aria-label="YouTube">
+            <div class="icon-face youtube-face">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="4" width="40" height="40" rx="10" fill="#FF0000"/>
+                <!-- YT play button -->
+                <rect x="8" y="14" width="32" height="20" rx="5" fill="white" opacity="0.15"/>
+                <polygon points="19,16 35,24 19,32" fill="white"/>
+              </svg>
+            </div>
+            <span class="icon-label">youtube</span>
+          </a>
+
+          <!-- Discord -->
+          <a class="icon-card app-card" href="#" data-pxy="https://discord.com/app" aria-label="Discord">
+            <div class="icon-face discord-face">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="4" width="40" height="40" rx="10" fill="#5865F2"/>
+                <!-- Discord mark -->
+                <path d="M34 13c-3-1-6-2-9-2s-6 1-9 2c-4 6-5 12-4 18 3 2 6 3 9 4l2-3c-2-1-3-2-5-3l1-1c4 2 8 2 12 0l1 1c-2 1-3 2-5 3l2 3c3-1 6-2 9-4 1-6 0-12-4-18z" fill="white"/>
+                <circle cx="19" cy="27" r="3" fill="#5865F2"/>
+                <circle cx="29" cy="27" r="3" fill="#5865F2"/>
+              </svg>
+            </div>
+            <span class="icon-label">discord</span>
+          </a>
+
+        </div>
+
+        <!-- Search Bar -->
+        <div class="search-wrap">
+          <div class="search-bar">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.4-4.4"/>
+            </svg>
+            <input id="search-input" type="text" placeholder="search anything..." autocomplete="off" spellcheck="false" aria-label="Search" list="search-suggestions" />
+            <datalist id="search-suggestions"></datalist>
+          </div>
+          <p class="search-hint">press <kbd>/</kbd> to focus · <kbd>?</kbd> for shortcuts</p>
+        </div>
+        <!-- Search history chips -->
+        <div class="search-history-wrap" id="search-history-wrap" hidden>
+          <div class="search-history-list" id="search-history-list"></div>
+          <button class="search-history-clear" id="search-history-clear" title="Clear search history">clear</button>
+        </div>
+        <div style="display:none">
+        </div>
+
+        <!-- Recent Sites -->
+        <div class="recent-wrap" id="recent-wrap" hidden>
+          <p class="recent-label">recent</p>
+          <div class="recent-list" id="recent-list"></div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- SECTION PANELS -->
+    <section class="section-panel" id="panel-games" hidden>
+      <div class="panel-header">
+        <h2 class="panel-title">games</h2>
+        <span class="new-badge" id="new-games-badge" hidden></span>
+        <span class="total-plays" id="total-play-count">0 plays</span>
+        <span class="panel-count" id="panel-game-count"></span>
+        <button class="panel-action-btn" id="surprise-btn" title="Random game">🎲</button>
+        <button class="panel-action-btn" id="lb-panel-btn" title="Leaderboard (L)">#</button>
+        <select id="sort-select" class="panel-sort" title="Sort games">
+          <option value="default">default</option>
+          <option value="plays">most played</option>
+          <option value="az">A → Z</option>
+          <option value="za">Z → A</option>
+          <option value="lastplayed">last played</option>
+        </select>
+      </div>
+      <!-- Custom game URL input -->
+      <div class="custom-game-wrap" id="custom-game-wrap">
+        <input type="text" id="custom-game-url" class="game-search" placeholder="▶ play any game URL — paste a .html or direct link..." autocomplete="off" spellcheck="false" style="border-color:var(--gold-dim)" />
+        <div class="custom-game-hint">paste a URL and press enter</div>
+      </div>
+      <!-- Multi-game tab bar -->
+      <div id="game-tabs-bar" hidden>
+        <div id="game-tabs-list"></div>
+        <button id="game-tabs-clear" title="Close all games">✕ all</button>
+      </div>
+
+      <!-- Source / category filter tabs -->
+      <div class="filter-tabs" id="game-filter-tabs">
+        <button class="filter-tab active" data-filter="all">all</button>
+        <button class="filter-tab" data-filter="gn-math">gn-math</button>
+        <button class="filter-tab" data-filter="truffled">truffled</button>
+        <button class="filter-tab" data-filter="favs" id="favs-tab">♥ favs</button>
+      </div>
+      <input type="text" id="game-search" class="game-search" placeholder="filter games..." autocomplete="off" />
+      <div class="panel-links" id="games-list">
+        <span class="loading-text">loading games...</span>
+      </div>
+      <p id="games-no-results" class="loading-text" hidden>no games match that filter</p>
+    </section>
+
+    <section class="section-panel" id="panel-apps" hidden>
+      <h2 class="panel-title">apps</h2>
+      <div class="panel-links">
+        <a class="panel-link" href="#" data-pxy="https://www.microsoft.com/en-us/windows/apps" target="_self">Windows Apps</a>
+        <a class="panel-link" href="#" data-pxy="https://github.com/"           target="_self">GitHub</a>
+        <a class="panel-link" href="#" data-pxy="https://replit.com/"           target="_self">Replit</a>
+        <a class="panel-link" href="#" data-pxy="https://codesandbox.io/"       target="_self">CodeSandbox</a>
+        <a class="panel-link" href="#" data-pxy="https://www.google.com/drive/" target="_self">Google Drive</a>
+      </div>
+    </section>
+
+    <section class="section-panel" id="panel-extra" hidden>
+      <h2 class="panel-title">extra</h2>
+      <div class="panel-links">
+        <a class="panel-link" href="#" data-pxy="https://www.reddit.com/"      target="_self">Reddit</a>
+        <a class="panel-link" href="#" data-pxy="https://www.instagram.com/"   target="_self">Instagram</a>
+        <a class="panel-link" href="#" data-pxy="https://x.com/"               target="_self">X / Twitter</a>
+        <a class="panel-link" href="#" data-pxy="https://www.spotify.com/"     target="_self">Spotify</a>
+        <a class="panel-link" href="#" data-pxy="https://www.roblox.com/"      target="_self">Roblox</a>
+        <a class="panel-link" href="#" data-pxy="https://www.chess.com/"       target="_self">Chess.com</a>
+      </div>
+    </section>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <!-- BOTTOM BAR -->
+    <footer class="bottom-bar">
+      <div class="bottom-links">
+        <span class="bottom-tagline">cowboysstuff</span>
+        <a class="footer-page-link" href="./dmca.html">dmca</a>
+        <a class="footer-page-link" href="./credits.html">credits</a>
+      </div>
+      <div class="bottom-actions">
+        <button class="bottom-btn" id="footer-settings" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </footer>
+
+    <!-- SCROLL TO TOP -->
+    <button id="scroll-top" aria-label="Scroll to top" title="Scroll to top">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M18 15l-6-6-6 6"/>
+      </svg>
+    </button>
+
+  <!-- Achievements Panel -->
+  <section class="section-panel" id="panel-achievements" hidden>
+    <div class="panel-header">
+      <h2 class="panel-title">achievements</h2>
+      <span class="panel-count" id="ach-count-label"></span>
+    </div>
+    <div id="achievements-container"></div>
+  </section>
+
+  <!-- Collections Panel -->
+  <section class="section-panel" id="panel-collections" hidden>
+    <div class="panel-header">
+      <h2 class="panel-title">collections</h2>
+      <button class="panel-action-btn" id="new-collection-btn" title="New collection">+</button>
+    </div>
+    <div id="collections-container">
+      <p class="loading-text" id="collections-empty">no collections yet — create one to save games</p>
+      <div id="collections-list"></div>
+    </div>
+  </section>
+
+  <!-- Leaderboard Panel -->
+  <section class="section-panel" id="panel-leaderboard" hidden>
+    <div class="panel-header">
+      <h2 class="panel-title">leaderboard</h2>
+      <span class="panel-count">by plays</span>
+    </div>
+    <div id="leaderboard-container"></div>
+  </section>
+
+  <!-- Now Playing Bar -->
+  <div id="now-playing" hidden>
+    <div class="np-dot"></div>
+    <span class="np-title" id="np-title">nothing playing</span>
+    <span class="np-time" id="np-time">0:00</span>
+    <button class="np-btn" id="np-resume">resume ▶</button>
+    <button class="np-btn" id="np-close-btn">✕</button>
+  </div>
+
+  <!-- Game Info Modal -->
+  <div id="game-info-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box game-info-box">
+      <div class="gi-header">
+        <span class="gi-source" id="gi-source"></span>
+        <button class="gi-fav" id="gi-fav" aria-label="Favourite">♡</button>
+      </div>
+      <h2 class="gi-title" id="gi-title"></h2>
+      <div class="gi-stats">
+        <span id="gi-plays">0 plays</span>
+        <span id="gi-ptime">0m played</span>
+        <span id="gi-mp" hidden>multiplayer</span>
+      </div>
+      <div class="gi-controls">
+        <div class="gi-control-row"><kbd>Arrow keys</kbd> move</div>
+        <div class="gi-control-row"><kbd>Z / X</kbd> action buttons</div>
+        <div class="gi-control-row"><kbd>Enter</kbd> start / confirm</div>
+        <div class="gi-control-row"><kbd>Esc</kbd> pause / back</div>
+      </div>
+      <div class="gi-actions">
+        <button class="modal-btn" id="gi-play-btn">▶ play now</button>
+        <button class="gi-pip-btn" id="gi-pip-btn" title="Open in mini PiP window">mini</button>
+        <button class="gi-share-btn" id="gi-share-btn" title="Copy share link">share</button>
+      </div>
+      <div class="gi-playnext" id="gi-playnext" hidden>
+        <p class="gi-playnext-label">you might also like</p>
+        <div class="gi-playnext-list" id="gi-playnext-list"></div>
+      </div>
+      <button class="gi-close" id="gi-close">✕</button>
+    </div>
+  </div>
+
+  <!-- New Collection Modal -->
+  <div id="new-collection-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:360px">
+      <p class="modal-welcome">new collection</p>
+      <input id="new-collection-input" class="settings-input" type="text" placeholder="collection name..." autocomplete="off" style="margin:16px 0 20px;width:100%;color:#111;background:#fafafa;border:1px solid #ddd;border-radius:6px;padding:8px 12px;font-family:inherit" />
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button id="new-collection-cancel" class="settings-action-btn">cancel</button>
+        <button id="new-collection-save" class="modal-btn">create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add-to-Collection Picker Modal -->
+  <div id="add-col-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:380px;text-align:left">
+      <p class="modal-welcome" style="margin-bottom:4px">add to collection</p>
+      <p class="col-picker-game-name" id="col-picker-game-name" style="font-size:0.78rem;color:#888;font-family:var(--font-mono);margin-bottom:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></p>
+      <div id="col-picker-list" class="col-picker-list"></div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid #eee;display:flex;gap:10px;align-items:center">
+        <button id="col-picker-new" class="settings-action-btn" style="font-size:0.78rem">+ new collection</button>
+        <button id="col-picker-cancel" class="modal-btn" style="margin-left:auto;background:#f5f5f5;color:#555;border:1px solid #ddd">cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Picture-in-Picture mini window -->
+  <div id="pip-window" hidden>
+    <div id="pip-bar">
+      <span id="pip-title"></span>
+      <div style="display:flex;gap:4px">
+        <button class="pip-btn" id="pip-expand" title="Expand">⛶</button>
+        <button class="pip-btn" id="pip-close" title="Close">✕</button>
+      </div>
+    </div>
+    <iframe id="pip-frame" allowfullscreen
+      allow="fullscreen; autoplay; clipboard-write"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock"></iframe>
+  </div>
+
+  </div><!-- /app -->
+
+  <script src="./js/config.js"></script>
+  <script>
+    // Fix all href="#" data-pxy="URL" elements using configured proxy base
+    document.addEventListener('DOMContentLoaded', function() {
+      var base = window.PROXY_BASE || '/p/';
+      document.querySelectorAll('[data-pxy]').forEach(function(el) {
+        var url = el.dataset.pxy;
+        if (!url) return;
+        el.href = base + url;
+        // Remove data-pxy so it doesn't interfere
+        el.removeAttribute('data-pxy');
+      });
+    });
+  </script>
+  <script src="./js/themes.js"></script>
+  <script src="./js/achievements.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

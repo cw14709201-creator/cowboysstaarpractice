@@ -47,7 +47,7 @@
   <!-- LOADING SCREEN -->
   <div id="loading-screen" aria-hidden="true">
     <div class="ls-inner">
-      <img src="./loading.png" class="ls-img" alt="" draggable="false" />
+      <div class="ls-spinner"></div>
       <p class="ls-msg" id="ls-msg">loading...</p>
     </div>
   </div>
@@ -189,9 +189,7 @@
 
     <!-- NAV BAR -->
     <nav class="navbar" role="navigation">
-      <button class="nav-logo-btn" id="home-btn" title="Home" aria-label="Home">
-        <img src="./kromp.png" class="kromp-logo" alt="kromp" draggable="false" />
-      </button>
+      
 
       <div class="nav-icons">
         <a class="nav-icon-btn" href="./flash.html" title="Flash games (⚡)" aria-label="Flash">
@@ -417,23 +415,25 @@
     <section class="section-panel" id="panel-apps" hidden>
       <h2 class="panel-title">apps</h2>
       <div class="panel-links">
-        <a class="panel-link" href="#" data-pxy="https://www.microsoft.com/en-us/windows/apps" target="_self">Windows Apps</a>
-        <a class="panel-link" href="#" data-pxy="https://github.com/"           target="_self">GitHub</a>
-        <a class="panel-link" href="#" data-pxy="https://replit.com/"           target="_self">Replit</a>
-        <a class="panel-link" href="#" data-pxy="https://codesandbox.io/"       target="_self">CodeSandbox</a>
-        <a class="panel-link" href="#" data-pxy="https://www.google.com/drive/" target="_self">Google Drive</a>
+        <a class="panel-link" href="#" data-pxy="https://www.youtube.com/">YouTube</a>
+        <a class="panel-link" href="#" data-pxy="https://www.tiktok.com/">TikTok</a>
+        <a class="panel-link" href="#" data-pxy="https://www.twitch.tv/">Twitch</a>
+        <a class="panel-link" href="#" data-pxy="https://discord.com/app">Discord</a>
+        <a class="panel-link" href="#" data-pxy="https://www.spotify.com/">Spotify</a>
+        <a class="panel-link" href="#" data-pxy="https://www.instagram.com/">Instagram</a>
+        <a class="panel-link" href="#" data-pxy="https://x.com/">X / Twitter</a>
+        <a class="panel-link" href="#" data-pxy="https://www.reddit.com/">Reddit</a>
+        <a class="panel-link" href="#" data-pxy="https://www.roblox.com/">Roblox</a>
+        <a class="panel-link" href="#" data-pxy="https://www.netflix.com/">Netflix</a>
+        <a class="panel-link" href="#" data-pxy="https://www.chess.com/">Chess.com</a>
+        <a class="panel-link" href="#" data-pxy="https://www.soundcloud.com/">SoundCloud</a>
       </div>
     </section>
 
     <section class="section-panel" id="panel-extra" hidden>
-      <h2 class="panel-title">extra</h2>
+      <h2 class="panel-title">partners</h2>
       <div class="panel-links">
-        <a class="panel-link" href="#" data-pxy="https://www.reddit.com/"      target="_self">Reddit</a>
-        <a class="panel-link" href="#" data-pxy="https://www.instagram.com/"   target="_self">Instagram</a>
-        <a class="panel-link" href="#" data-pxy="https://x.com/"               target="_self">X / Twitter</a>
-        <a class="panel-link" href="#" data-pxy="https://www.spotify.com/"     target="_self">Spotify</a>
-        <a class="panel-link" href="#" data-pxy="https://www.roblox.com/"      target="_self">Roblox</a>
-        <a class="panel-link" href="#" data-pxy="https://www.chess.com/"       target="_self">Chess.com</a>
+        <p class="loading-text">coming soon</p>
       </div>
     </section>
 
@@ -580,12 +580,12 @@
   <script>
     // Fix all href="#" data-pxy="URL" elements using configured proxy base
     document.addEventListener('DOMContentLoaded', function() {
-      var base = window.PROXY_BASE || '/p/';
+      var base = window.PROXY_BASE || '';
       document.querySelectorAll('[data-pxy]').forEach(function(el) {
         var url = el.dataset.pxy;
         if (!url) return;
-        el.href = base + url;
-        // Remove data-pxy so it doesn't interfere
+        el.href = base ? base + url : url;
+        if (!base) el.target = '_blank';
         el.removeAttribute('data-pxy');
       });
     });

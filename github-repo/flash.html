@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>flash — cowboysstuff</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg,#080808); color: var(--white,#f5f5f0); font-family: 'Share Tech Mono', monospace; overflow-x: hidden; }
+
+    /* ── Top bar ── */
+    #bar {
+      position: fixed; top: 0; left: 0; right: 0; height: 42px; z-index: 9999;
+      background: rgba(8,8,8,0.95); border-bottom: 1px solid #1e1e1e;
+      display: flex; align-items: center; gap: 6px; padding: 0 14px;
+    }
+    .bar-title { color: #d4a017; font-size: 11px; white-space: nowrap; }
+    .btn {
+      background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 5px;
+      color: #aaa; cursor: pointer; height: 27px; padding: 0 10px;
+      font-family: inherit; font-size: 12px; white-space: nowrap;
+      transition: color .14s, border-color .14s; flex-shrink: 0;
+    }
+    .btn:hover { color: #d4a017; border-color: #9a7412; }
+    .sep { width: 1px; height: 18px; background: #2a2a2a; flex-shrink: 0; }
+
+    /* ── Main layout ── */
+    #main { padding-top: 42px; display: flex; height: 100vh; }
+
+    /* ── Game list sidebar ── */
+    #sidebar {
+      width: 260px; min-width: 260px; border-right: 1px solid #1a1a1a;
+      overflow-y: auto; background: #0c0c0c;
+    }
+    #sidebar::-webkit-scrollbar { width: 4px; }
+    #sidebar::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+    .sidebar-header {
+      padding: 12px 14px 8px; font-size: 10px; color: #555;
+      letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid #1a1a1a;
+    }
+
+    #game-search-sidebar {
+      display: block; width: 100%; background: #111; border: none; border-bottom: 1px solid #1a1a1a;
+      color: #f5f5f0; padding: 8px 14px; font-family: inherit; font-size: 12px;
+      outline: none; caret-color: #d4a017;
+    }
+    #game-search-sidebar::placeholder { color: #444; }
+
+    .cat-section { border-bottom: 1px solid #141414; }
+    .cat-label {
+      padding: 8px 14px 4px; font-size: 10px; color: #555;
+      letter-spacing: .08em; text-transform: uppercase; display: flex;
+      align-items: center; gap: 6px;
+    }
+    .cat-label span { color: #333; }
+
+    .game-item {
+      display: flex; align-items: center; padding: 7px 14px; cursor: pointer;
+      transition: background .12s; border-radius: 0; gap: 8px; user-select: none;
+    }
+    .game-item:hover { background: #161616; }
+    .game-item.active { background: #1c1a12; }
+    .game-item-name { font-size: 12px; color: #ccc; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .game-item.active .game-item-name { color: #d4a017; }
+    .fav-btn { background: none; border: none; cursor: pointer; font-size: 13px; padding: 0; line-height: 1; opacity: .4; transition: opacity .14s; }
+    .fav-btn:hover { opacity: 1; }
+    .fav-btn.active { opacity: 1; }
+
+    /* ── Player area ── */
+    #player-area {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; position: relative; overflow: hidden;
+    }
+
+    #welcome {
+      text-align: center; opacity: .35; user-select: none;
+    }
+    #welcome h2 { font-size: 1.8rem; margin-bottom: 8px; }
+    #welcome p { font-size: .85rem; }
+
+    #ruffle-container {
+      width: 100%; height: 100%; display: none; position: relative;
+    }
+    ruffle-player {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    /* ── Game info overlay ── */
+    #game-info {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.75); backdrop-filter: blur(8px);
+      border: 1px solid #2a2a2a; border-radius: 10px;
+      padding: 8px 16px; font-size: 11px; color: #888;
+      white-space: nowrap; pointer-events: none; opacity: 0;
+      transition: opacity .3s;
+    }
+    #game-info.show { opacity: 1; }
+    #game-info b { color: #d4a017; }
+
+    /* ── Sidebar toggle on mobile ── */
+    #sidebar-toggle { display: none; }
+
+    @media (max-width: 600px) {
+      #sidebar { display: none; position: fixed; top: 42px; left: 0; bottom: 0; z-index: 500; }
+      #sidebar.open { display: block; }
+      #sidebar-toggle { display: inline-flex; }
+    }
+  </style>
+
+  <script src="/js/config.js"></script>
+  <script>
+    /* Inherit theme from main site */
+    (function(){
+      var t=localStorage.getItem('cowboysstuff_theme');
+      var themes={'cowboy':{'--gold':'#d4a017','--bg':'#080808','--surface':'#121212','--border':'#2a2a2a','--white':'#f5f5f0','--muted':'#666'},
+        'neon':{'--gold':'#c084fc','--bg':'#0a0510','--surface':'#130b1f','--border':'#3b1d6e','--white':'#f0e8ff','--muted':'#7c5cbf'},
+        'ocean':{'--gold':'#38bdf8','--bg':'#050d14','--surface':'#0a1929','--border':'#1e4060','--white':'#e0f0ff','--muted':'#4a7fa0'},
+        'crimson':{'--gold':'#f87171','--bg':'#0d0505','--surface':'#1a0a0a','--border':'#4a1818','--white':'#fff0f0','--muted':'#9a5555'},
+        'matrix':{'--gold':'#4ade80','--bg':'#020d05','--surface':'#061510','--border':'#14502a','--white':'#e0ffe8','--muted':'#3a7a50'},
+        'midnight':{'--gold':'#94a3b8','--bg':'#020204','--surface':'#0a0a12','--border':'#1e1e2e','--white':'#e2e8f0','--muted':'#4a4a6a'}
+      };
+      var m=new Date().getMonth();
+      if(t==='seasonal')t=m>=2&&m<=3?'matrix':m>=4&&m<=7?'ocean':m>=8&&m<=9?'cowboy':'crimson';
+      var vars=themes[t]||themes['cowboy'];
+      for(var k in vars)document.documentElement.style.setProperty(k,vars[k]);
+    })();
+  </script>
+</head>
+<body>
+
+<div id="bar">
+  <span class="bar-title">⚡ flash</span>
+  <div class="sep"></div>
+  <button class="btn" id="sidebar-toggle" title="Toggle game list">☰</button>
+  <button class="btn" id="btn-fav" title="Favourite this game" style="display:none">♥ fav</button>
+  <button class="btn" id="btn-fullscreen" title="Fullscreen (F)">⛶</button>
+  <button class="btn" id="btn-home" title="Home">⌂ home</button>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="sidebar-header">⚡ Flash Games</div>
+    <input id="game-search-sidebar" placeholder="search games..." autocomplete="off" spellcheck="false" />
+    <div id="game-list"></div>
+  </div>
+
+  <div id="player-area">
+    <div id="welcome">
+      <h2>⚡</h2>
+      <p>pick a game from the list</p>
+    </div>
+    <div id="ruffle-container"></div>
+    <div id="game-info"></div>
+  </div>
+</div>
+
+<!-- Ruffle CDN — loads WebAssembly Flash runtime -->
+<script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+
+<script>
+/* ── Flash game library ── */
+/* All .swf files served from Archive.org (public domain / freely accessible) */
+const BASE = 'https://archive.org/download/';
+const FLASH_GAMES = [
+  /* ── Action ── */
+  { id:'ag-adrenaline',  name:'Adrenaline',          cat:'Action',  url: BASE+'adrenaline_201908/adrenaline.swf' },
+  { id:'ag-stickarena',  name:'Stick Arena',          cat:'Action',  url: BASE+'StickArena/StickArena.swf' },
+  { id:'ag-boxhead2',    name:'Boxhead 2',            cat:'Action',  url: BASE+'boxhead_2/boxhead_2.swf' },
+  { id:'ag-swords',      name:'Swords & Sandals',     cat:'Action',  url: BASE+'flashgames_swordsandsandals/swords_and_sandals.swf' },
+  { id:'ag-madnesscom',  name:'Madness Combat',       cat:'Action',  url: BASE+'madness_combat_flash/MadnessCombat.swf' },
+  /* ── Puzzle ── */
+  { id:'ag-bloons',      name:'Bloons',               cat:'Puzzle',  url: BASE+'bloons-flash/bloons.swf' },
+  { id:'ag-bloons2',     name:'Bloons 2',             cat:'Puzzle',  url: BASE+'bloons2_flash/bloons2.swf' },
+  { id:'ag-cubefield',   name:'Cubefield',            cat:'Puzzle',  url: BASE+'cubefield_flash/cubefield.swf' },
+  { id:'ag-papas',       name:"Papa's Pizzeria",      cat:'Puzzle',  url: BASE+'papas-pizzeria-flash/papas_pizzeria.swf' },
+  { id:'ag-linerider',   name:'Line Rider',           cat:'Puzzle',  url: BASE+'line-rider-flash/linerider.swf' },
+  /* ── Platform ── */
+  { id:'ag-fancypants',  name:'Fancy Pants',          cat:'Platform',url: BASE+'fancy-pants-adventure-flash/fancy_pants_adventure.swf' },
+  { id:'ag-fancypants2', name:'Fancy Pants 2',        cat:'Platform',url: BASE+'fancy-pants-adventure-2-flash/fancy_pants_2.swf' },
+  { id:'ag-icebreaker',  name:'Ice Breaker',          cat:'Platform',url: BASE+'ice-breaker-flash/icebreaker.swf' },
+  { id:'ag-ninjahattori', name:'Ninja Hattori',       cat:'Platform',url: BASE+'ninja-hattori-flash/ninja_hattori.swf' },
+  { id:'ag-rtype',       name:'R-Type Flash',         cat:'Platform',url: BASE+'rtype-flash/rtype.swf' },
+  /* ── Sports ── */
+  { id:'ag-1onone',      name:'1 on 1 Soccer',        cat:'Sports',  url: BASE+'1-on-1-soccer-flash/1on1soccer.swf' },
+  { id:'ag-miniputt',    name:'Mini Putt',            cat:'Sports',  url: BASE+'mini-putt-flash/miniputt.swf' },
+  { id:'ag-powerpong',   name:'Power Pong',           cat:'Sports',  url: BASE+'power-pong-flash/powerpong.swf' },
+  /* ── Strategy ── */
+  { id:'ag-desktop-td',  name:'Desktop Tower Defense',cat:'Strategy',url: BASE+'desktop-tower-defense-flash/dtd.swf' },
+  { id:'ag-gemcraft',    name:'GemCraft',             cat:'Strategy',url: BASE+'gemcraft-flash/gemcraft.swf' },
+  { id:'ag-warfare',     name:'Warfare 1917',         cat:'Strategy',url: BASE+'warfare-1917-flash/warfare1917.swf' },
+];
+
+/* ── State ── */
+const FAV_KEY      = 'cowboysstuff_flash_favs';
+const PLAYS_PREFIX = 'cowboysstuff_plays_flash_';
+const PTIME_PREFIX = 'cowboysstuff_ptime_';
+
+let currentGame = null;
+let playStart   = null;
+let filterQuery = '';
+
+function getFavs()  { try{return new Set(JSON.parse(localStorage.getItem(FAV_KEY)||'[]'));}catch{return new Set();} }
+function saveFavs(s){ localStorage.setItem(FAV_KEY, JSON.stringify([...s])); }
+function getPlays(id){ return parseInt(localStorage.getItem(PLAYS_PREFIX+id)||'0',10); }
+function getPtime(id){ return parseInt(localStorage.getItem(PTIME_PREFIX+id)||'0',10); }
+function addPtime(id,sec){ localStorage.setItem(PTIME_PREFIX+id, getPtime(id)+Math.round(sec)); }
+
+/* ── Build sidebar ── */
+function buildSidebar() {
+  const list = document.getElementById('game-list');
+  const favs = getFavs();
+  const q    = filterQuery.toLowerCase();
+
+  const filtered = FLASH_GAMES.filter(g =>
+    !q || g.name.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q)
+  );
+
+  // Group by category
+  const cats = {};
+  filtered.forEach(g => {
+    if (!cats[g.cat]) cats[g.cat] = [];
+    cats[g.cat].push(g);
+  });
+
+  list.innerHTML = '';
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding:14px;font-size:12px;color:#555">no games found</div>';
+    return;
+  }
+
+  // Favourites section first
+  const favGames = filtered.filter(g => favs.has(g.id));
+  if (favGames.length) {
+    const sec = document.createElement('div'); sec.className = 'cat-section';
+    sec.innerHTML = `<div class="cat-label">♥ Favourites <span>(${favGames.length})</span></div>`;
+    favGames.forEach(g => sec.appendChild(makeGameItem(g, favs)));
+    list.appendChild(sec);
+  }
+
+  Object.entries(cats).forEach(([cat, games]) => {
+    const sec = document.createElement('div'); sec.className = 'cat-section';
+    sec.innerHTML = `<div class="cat-label">${cat} <span>(${games.length})</span></div>`;
+    games.forEach(g => sec.appendChild(makeGameItem(g, favs)));
+    list.appendChild(sec);
+  });
+}
+
+function makeGameItem(game, favs) {
+  const div = document.createElement('div');
+  div.className = 'game-item' + (currentGame?.id === game.id ? ' active' : '');
+  div.dataset.id = game.id;
+
+  const name = document.createElement('span'); name.className = 'game-item-name'; name.textContent = game.name;
+  const fav  = document.createElement('button');
+  fav.className = 'fav-btn' + (favs.has(game.id) ? ' active' : '');
+  fav.textContent = favs.has(game.id) ? '♥' : '♡';
+  fav.title = 'Favourite';
+
+  fav.addEventListener('click', e => {
+    e.stopPropagation();
+    const f = getFavs();
+    if (f.has(game.id)) f.delete(game.id); else f.add(game.id);
+    saveFavs(f);
+    buildSidebar();
+  });
+
+  div.addEventListener('click', () => loadGame(game));
+  div.appendChild(name);
+  div.appendChild(fav);
+  return div;
+}
+
+/* ── Load game ── */
+function loadGame(game) {
+  if (playStart && currentGame) {
+    addPtime(currentGame.id, (Date.now() - playStart) / 1000);
+  }
+  currentGame = game;
+  playStart   = Date.now();
+
+  // Increment play count
+  const c = getPlays(game.id);
+  localStorage.setItem(PLAYS_PREFIX + game.id, c + 1);
+
+  // Show container
+  document.getElementById('welcome').style.display = 'none';
+  const container = document.getElementById('ruffle-container');
+  container.style.display = 'block';
+  container.innerHTML = '';
+
+  // Create Ruffle player
+  const ruffle = window.RufflePlayer.newest();
+  const player = ruffle.createPlayer();
+  player.style.width  = '100%';
+  player.style.height = '100%';
+  container.appendChild(player);
+
+  player.load({
+    url:               game.url,
+    backgroundColor:   '#000000',
+    allowScriptAccess: false,
+    parameters:        {},
+  }).catch(err => {
+    container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:#555;font-size:13px">
+      <span style="font-size:2rem">⚠️</span>
+      <span>failed to load</span>
+      <small style="opacity:.5">${err.message || err}</small>
+    </div>`;
+  });
+
+  // Show game info
+  const plays = getPlays(game.id);
+  const pt    = getPtime(game.id);
+  const info  = document.getElementById('game-info');
+  info.innerHTML = `<b>${game.name}</b> · ${plays} plays · ${Math.round(pt/60)}m played`;
+  info.classList.add('show');
+  setTimeout(() => info.classList.remove('show'), 3500);
+
+  // Update fav button
+  const favs = getFavs();
+  const favBtn = document.getElementById('btn-fav');
+  favBtn.style.display = '';
+  favBtn.textContent   = favs.has(game.id) ? '♥ faved' : '♡ fav';
+  favBtn.dataset.id    = game.id;
+
+  // Rebuild sidebar to highlight active
+  buildSidebar();
+  document.title = game.name + ' — cowboysstuff flash';
+}
+
+/* ── Controls ── */
+document.getElementById('btn-fav').addEventListener('click', () => {
+  if (!currentGame) return;
+  const f   = getFavs();
+  const btn = document.getElementById('btn-fav');
+  if (f.has(currentGame.id)) { f.delete(currentGame.id); btn.textContent = '♡ fav'; }
+  else { f.add(currentGame.id); btn.textContent = '♥ faved'; }
+  saveFavs(f);
+  buildSidebar();
+  toast(f.has(currentGame.id) ? 'added to favourites' : 'removed from favourites');
+});
+
+document.getElementById('btn-fullscreen').addEventListener('click', () => {
+  const el = document.getElementById('player-area');
+  (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+});
+
+document.getElementById('btn-home').addEventListener('click', () => window.location.href = '/');
+
+document.getElementById('sidebar-toggle').addEventListener('click', () =>
+  document.getElementById('sidebar').classList.toggle('open')
+);
+
+document.getElementById('game-search-sidebar').addEventListener('input', e => {
+  filterQuery = e.target.value;
+  buildSidebar();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'f' || e.key === 'F') document.getElementById('btn-fullscreen').click();
+  if (e.key === 'Escape' && !currentGame) window.location.href = '/';
+});
+
+// Save playtime on unload
+window.addEventListener('beforeunload', () => {
+  if (playStart && currentGame) addPtime(currentGame.id, (Date.now()-playStart)/1000);
+});
+
+/* ── Simple toast ── */
+function toast(msg) {
+  let el = document.getElementById('_toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '_toast';
+    el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;padding:6px 16px;font-size:12px;color:#f5f5f0;z-index:9999;pointer-events:none;transition:opacity .2s';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg; el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.opacity = '0', 1800);
+}
+
+/* ── Init ── */
+buildSidebar();
+</script>
+</body>
+</html>

@@ -192,11 +192,6 @@
       
 
       <div class="nav-icons">
-        <a class="nav-icon-btn" href="./flash.html" title="Flash games (⚡)" aria-label="Flash">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </a>
 
         <button class="nav-icon-btn" id="nav-games" title="Games (G)" aria-label="Games">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -207,14 +202,6 @@
           </svg>
         </button>
         <button class="nav-icon-btn" id="nav-apps" title="Apps (A)" aria-label="Apps">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <rect x="3" y="3" width="8" height="8" rx="1.5"/>
-            <rect x="13" y="3" width="8" height="8" rx="1.5"/>
-            <rect x="3" y="13" width="8" height="8" rx="1.5"/>
-            <rect x="13" y="13" width="8" height="8" rx="1.5"/>
-          </svg>
-        </button>
-        <button class="nav-icon-btn" id="nav-extra" title="Extra (E)" aria-label="Extra">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
             <path d="M12 4v16M4 12h16"/>
           </svg>
@@ -227,6 +214,11 @@
         <button class="nav-icon-btn" id="nav-collections" title="Collections (C)" aria-label="Collections">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M19 11H5M19 6H5M19 16H5M19 21H5"/>
+          </svg>
+        </button>
+        <button class="nav-icon-btn" id="nav-ai" title="AI Chat (I)" aria-label="AI Chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </button>
         <button class="nav-icon-btn" id="nav-anim-toggle" title="Toggle animations" aria-label="Toggle animations">
@@ -401,7 +393,7 @@
       <!-- Source / category filter tabs -->
       <div class="filter-tabs" id="game-filter-tabs">
         <button class="filter-tab active" data-filter="all">all</button>
-        <button class="filter-tab" data-filter="gn-math">gn-math</button>
+        <button class="filter-tab" data-filter="freebuisness">gn-math</button>
         <button class="filter-tab" data-filter="truffled">truffled</button>
         <button class="filter-tab" data-filter="favs" id="favs-tab">♥ favs</button>
       </div>
@@ -412,7 +404,7 @@
       <p id="games-no-results" class="loading-text" hidden>no games match that filter</p>
     </section>
 
-    <section class="section-panel" id="panel-apps" hidden>
+    <section class="section-panel" id="panel-extra" hidden>
       <h2 class="panel-title">apps</h2>
       <div class="panel-links">
         <a class="panel-link" href="#" data-pxy="https://www.youtube.com/">YouTube</a>
@@ -427,13 +419,6 @@
         <a class="panel-link" href="#" data-pxy="https://www.netflix.com/">Netflix</a>
         <a class="panel-link" href="#" data-pxy="https://www.chess.com/">Chess.com</a>
         <a class="panel-link" href="#" data-pxy="https://www.soundcloud.com/">SoundCloud</a>
-      </div>
-    </section>
-
-    <section class="section-panel" id="panel-extra" hidden>
-      <h2 class="panel-title">partners</h2>
-      <div class="panel-links">
-        <p class="loading-text">coming soon</p>
       </div>
     </section>
 
@@ -486,6 +471,18 @@
   </section>
 
   <!-- Leaderboard Panel -->
+  <section class="section-panel" id="panel-ai" hidden>
+    <div class="panel-header">
+      <h2 class="panel-title">ai chat</h2>
+      <button id="ai-clear-btn" class="panel-count" style="cursor:pointer;background:none;border:none;color:var(--muted);font-family:var(--font-mono);font-size:.75rem;" title="Clear chat">clear</button>
+    </div>
+    <div id="ai-messages"></div>
+    <div id="ai-input-row">
+      <input id="ai-input" type="text" autocomplete="off" spellcheck="false" placeholder="ask anything..." maxlength="2000" />
+      <button id="ai-send-btn">send</button>
+    </div>
+  </section>
+
   <section class="section-panel" id="panel-leaderboard" hidden>
     <div class="panel-header">
       <h2 class="panel-title">leaderboard</h2>
@@ -510,7 +507,16 @@
         <span class="gi-source" id="gi-source"></span>
         <button class="gi-fav" id="gi-fav" aria-label="Favourite">♡</button>
       </div>
-      <h2 class="gi-title" id="gi-title"></h2>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h2 class="gi-title" id="gi-title" style="flex:1;min-width:0"></h2>
+        <button id="gi-rename-btn" title="Rename game" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-family:var(--font-mono);font-size:.72rem;padding:3px 8px;flex-shrink:0;transition:color .12s,border-color .12s" onmouseover="this.style.color='var(--white)';this.style.borderColor='var(--gold-dim)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">rename</button>
+      </div>
+      <div id="gi-rename-row" hidden style="display:flex;gap:6px;margin-bottom:6px">
+        <input id="gi-rename-input" type="text" autocomplete="off" spellcheck="false"
+          style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--white);font-family:var(--font-mono);font-size:.8rem;padding:5px 10px;outline:none" />
+        <button id="gi-rename-save" style="background:var(--gold);border:none;border-radius:var(--radius-sm);color:#080808;cursor:pointer;font-family:var(--font-mono);font-size:.75rem;font-weight:700;padding:5px 12px">save</button>
+        <button id="gi-rename-clear" title="Reset to default" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-family:var(--font-mono);font-size:.72rem;padding:5px 8px">×</button>
+      </div>
       <div class="gi-stats">
         <span id="gi-plays">0 plays</span>
         <span id="gi-ptime">0m played</span>

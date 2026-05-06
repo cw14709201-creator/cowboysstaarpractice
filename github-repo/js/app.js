@@ -4,15 +4,38 @@ const CURRENT_VERSION  = 'v1.0';
 const STORAGE_KEY      = 'cowboysstuff_last_seen_version';
 const COUNTER_PREFIX   = 'cowboysstuff_plays_';
 const RECENT_KEY       = 'cowboysstuff_recent';
+const GAME_NAMES_KEY   = 'cowboysstuff_game_names';
+
+function getCustomNames() {
+  try { return JSON.parse(localStorage.getItem(GAME_NAMES_KEY) || '{}'); } catch { return {}; }
+}
+function getGameName(gameId, defaultName) {
+  return getCustomNames()[gameId] || defaultName;
+}
+function setGameName(gameId, name) {
+  const m = getCustomNames();
+  m[gameId] = name.trim();
+  localStorage.setItem(GAME_NAMES_KEY, JSON.stringify(m));
+}
+function clearGameName(gameId) {
+  const m = getCustomNames();
+  delete m[gameId];
+  localStorage.setItem(GAME_NAMES_KEY, JSON.stringify(m));
+}
+function applyCustomNamesToDOM() {
+  const map = getCustomNames();
+  document.querySelectorAll('#games-list .game-link[data-game]').forEach(link => {
+    const id = link.dataset.game;
+    if (!map[id]) return;
+    const ns = link.querySelector('.game-name');
+    if (ns) ns.textContent = map[id];
+    link.dataset.displayName = map[id];
+  });
+}
 const CLOAK_TITLE_KEY  = 'cowboysstuff_cloak_title';
 const CLOAK_URL_KEY    = 'cowboysstuff_cloak_url';
 const RECENT_MAX       = 8;
 
-const GNMATH_JS    = 'https://cdn.jsdelivr.net/gh/gn-math/gn-math.github.io@main/gnmath.js';
-const HTML_CDN     = 'https://cdn.jsdelivr.net/gh/gn-math/html@main/';
-const COVERS_CDN   = 'https://cdn.jsdelivr.net/gh/gn-math/covers@main/';
-const TRUFFLED_API = 'https://data.jsdelivr.com/v1/package/gh/molkify/truffled-games@main/flat';
-const TRUFFLED_CDN = 'https://cdn.jsdelivr.net/gh/molkify/truffled-games@main';
 
 const LOADING_MSGS_COMMON = [
   "don't you dare skid this",
@@ -275,32 +298,543 @@ document.addEventListener('click', (e) => {
 
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-function loadGnMathZones() {
-  return new Promise((resolve) => {
-    if (Array.isArray(window.zones) && window.zones.length) return resolve(window.zones);
-    const s   = document.createElement('script');
-    s.src     = GNMATH_JS;
-    s.onload  = () => resolve(Array.isArray(window.zones) ? window.zones : []);
-    s.onerror = () => resolve([]);
-    document.head.appendChild(s);
-  });
+const FREEBUISNESS_API  = 'https://data.jsdelivr.com/v1/package/gh/freebuisness/html@main/flat';
+const FREEBUISNESS_CDN  = 'https://cdn.jsdelivr.net/gh/freebuisness/html@main';
+const GNMATH_ZONES_URL  = 'https://cdn.jsdelivr.net/gh/gn-math/gn-math.github.io@main/gnmath.js';
+const TRUFFLED_API      = 'https://data.jsdelivr.com/v1/package/gh/molkify/truffled-games@main/flat';
+const TRUFFLED_BASE     = 'https://truffled.lol';
+const FB_NAMES_KEY      = 'cowboysstuff_fb_names_cache';
+
+// Build a filename→name map by loading the gnmath zones script
+// gnmath.js sets window.zones = [{id, name, url, ...}]
+// zone.url contains the CDN path to the freebuisness file
+async function loadFreebuisnessNames() {
+  // Check cache first (avoid re-fetching on every page load)
+  try {
+    const cached = sessionStorage.getItem(FB_NAMES_KEY);
+    if (cached) return JSON.parse(cached);
+  } catch {}
+
+  try {
+    const res  = await fetch(GNMATH_ZONES_URL);
+    if (!res.ok) return {};
+    const text = await res.text();
+    // Execute the script in a sandboxed way to extract window.zones
+    const sandbox = {};
+    const fn = new Function('window', text + '\nreturn window.zones || [];');
+    const zones = fn(sandbox);
+    if (!Array.isArray(zones)) return {};
+
+    // Build map: filename (e.g. "182") → game name
+    const map = {};
+    zones.forEach(z => {
+      if (!z.name || !z.url) return;
+      // url is like "https://cdn.jsdelivr.net/gh/freebuisness/html@main/182.html"
+      // or "{HTML_URL}/182.html" or just "182.html"
+      const match = String(z.url).match(/\/(\d+[^/]*\.html)(?:\?|$)/);
+      if (match) {
+        const fname = match[1].replace(/\.html.*$/, '');
+        map[fname] = z.name;
+      }
+    });
+    sessionStorage.setItem(FB_NAMES_KEY, JSON.stringify(map));
+    return map;
+  } catch { return {}; }
 }
+
+async function loadFreebuisnessGames() {
+  try {
+    const [res, nameMap] = await Promise.all([
+      fetch(FREEBUISNESS_API),
+      loadFreebuisnessNames(),
+    ]);
+    if (!res.ok) return [];
+    const data  = await res.json();
+    const seen  = new Set();
+    return (data.files || [])
+      .filter(f => f.name.endsWith('.html') && !f.name.includes('.html-') && f.size > 5000)
+      .map(f => {
+        const filename  = f.name.replace(/^\//, '').replace(/\.html$/i, '');
+        const numMatch  = filename.match(/^(\d+)/);
+        const num       = numMatch ? numMatch[1] : filename;
+        const gameId    = 'fb-' + num;
+        if (seen.has(gameId)) return null;
+        seen.add(gameId);
+        // Use real name from gnmath zones if available
+        const realName = nameMap[filename] || nameMap[num] ||
+          'Game ' + filename.replace(/-(fix\d*|fixed|fix2?|fixx|f|a|b|c|e|el|u|z|update|upd\d*|awe|temp\d*|work|win|wow|ff|fi)$/gi,'').replace(/-+$/,'');
+        return { gameId, name: realName, rawUrl: FREEBUISNESS_CDN + f.name, source: 'gn-math' };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+const TRUFFLED_NAMES = {
+  'a-difficult-game-about-climbing': 'A Difficult Game About Climbing',
+  'a-game-about-feeding-a-blackhole': 'A Game About Feeding A Blackhole',
+  'a-small-world-cup': 'A Small World Cup',
+  'academytale': 'Academytale',
+  'achievement-unlocked': 'Achievement Unlocked',
+  'adofai': 'ADOFAI',
+  'adventure-capitalist': 'Adventure Capitalist',
+  'amanda-the-adventurer': 'Amanda the adventurer',
+  'among-us': 'Among us',
+  'amaze': 'Amaze',
+  'angry-birds': 'Angry Birds',
+  'angry-birds-epic': 'Angry Birds Epic',
+  'angry-birds-online': 'Angry Birds Online',
+  'animal-crossing-population-growing': 'Animal Crossing Population: Growing!',
+  'antonblast': 'Antonblast',
+  'apes-vs-helium': 'Apes Vs Helium',
+  'arthurs-nightmare': 'Arthur\'s Nightmare',
+  'bad-icecream-1': 'Bad Icecream 1',
+  'bad-icecream-2': 'Bad Icecream 2',
+  'bad-icecream-3': 'Bad Icecream 3',
+  'bad-parenting': 'Bad Parenting',
+  'bad-piggies': 'Bad Piggies',
+  'bad-time-simulator': 'Bad time Simulator',
+  'balatro': 'Balatro',
+  'baldis-basics': 'Baldi\'s Basics',
+  'baldis-basics-birthday-bash': 'Baldi\'s Basics Birthday Bash',
+  'baldis-basics-classic-remastered': 'Baldi\'s Basics Classic Remastered',
+  'baldis-basics-plus': 'Baldi\'s Basics Plus',
+  'baldis-fun-new-school-plus-ultimate-edition': 'Baldi\'s Fun New School Plus Ultimate Edition',
+  'baldurs-gate-2': 'Baldurs Gate 2',
+  'banjo-kazooie': 'Banjo Kazooie',
+  'bart-bash': 'Bart Bash',
+  'bart-blast': 'Bart Blast',
+  'baseball-bros': 'Baseball Bros',
+  'basket-bros': 'Basket Bros',
+  'basket-random': 'Basket Random',
+  'basketball-stars': 'Basketball stars',
+  'beatblock': 'Beatblock',
+  'bendy-and-the-ink-machine': 'Bendy And The Ink Machine',
+  'bergentruck': 'Bergentruck',
+  'bfdia-5b': 'Bfdia 5b',
+  'bitlife': 'Bitlife',
+  'black-jack': 'Black Jack',
+  'block-blast': 'Block Blast',
+  'bloodmoney': 'Bloodmoney',
+  'bloon-td1': 'Bloon TD1',
+  'bloon-td2': 'Bloon TD2',
+  'bloon-td3': 'Bloon TD3',
+  'bloon-td4': 'Bloon TD4',
+  'bloons-td5': 'Bloons TD5',
+  'bloons-td6': 'Bloons TD6',
+  'bloxors': 'Bloxors',
+  'bombmerman': 'Bombmerman',
+  'bombmerman-2': 'Bombmerman 2',
+  'boxing-random': 'Boxing Random',
+  'brotato-paws-and-claws': 'Brotato Paws And Claws',
+  'buckshot-roulette': 'Buckshot Roulette',
+  'burrito-bison': 'Burrito Bison',
+  'burrito-bison-revenge': 'Burrito Bison Revenge',
+  'capuchin': 'Capuchin',
+  'caseohs-basics-in-eating-and-fast-food': 'CaseOhs Basics in Eating and Fast Food',
+  'celeste': 'Celeste',
+  'cheese-rolling': 'Cheese Rolling',
+  'christmas-massacre': 'Christmas Massacre',
+  'class-of-09': 'Class Of 09',
+  'class-of-09-flipside': 'Class Of 09 Flipside',
+  'class-of-09-re-up': 'Class Of 09 Re-Up',
+  'clover-pit': 'Clover Pit',
+  'cluster-rush': 'Cluster Rush',
+  'coffee-talk': 'Coffee Talk',
+  'cookie-clicker': 'Cookie Clicker',
+  'cooking-mama': 'Cooking Mama',
+  'cooking-mama-2': 'Cooking Mama 2',
+  'cooking-mama-3': 'Cooking Mama 3',
+  'counter-stike-08': 'Counter Stike 0.8',
+  'crash-bandicoot-1': 'Crash Bandicoot 1',
+  'crash-bandicoot-2': 'Crash Bandicoot 2',
+  'crash-bandicoot-3': 'Crash Bandicoot 3',
+  'crazy-balls': 'Crazy Balls',
+  'crazycattle3d': 'CrazyCattle3D',
+  'crossy-roads': 'Crossy Roads',
+  'cruelty-squad': 'Cruelty Squad',
+  'csgo-clicker': 'Csgo Clicker',
+  'cuphead': 'Cuphead',
+  'customer-support': 'Customer Support',
+  'cut-the-rope': 'Cut The Rope',
+  'cut-the-rope-time-travel': 'Cut The Rope : Time Travel',
+  'cut-the-rope-holiday': 'Cut The Rope Holiday',
+  'dadish': 'Dadish',
+  'dadish-2': 'Dadish 2',
+  'dadish-3': 'Dadish 3',
+  'dadish-3d': 'Dadish 3d',
+  'dadish-daily': 'Dadish Daily',
+  'danganronpa': 'Danganronpa',
+  'dead-plate': 'DEAD PLATE',
+  'dead-tapes': 'Dead Tapes',
+  'deadseat': 'Deadseat',
+  'death-run-3d': 'Death Run 3D',
+  'deltarune': 'Deltarune',
+  'deltatraveler': 'Deltatraveler',
+  'diablo': 'Diablo',
+  'dice-a-million': 'Dice A Million',
+  'dinosaur': 'Dinosaur',
+  'do-not-take-this-cat-home': 'Do Not Take This Cat Home',
+  'doge-miner': 'Doge Miner',
+  'doge-miner-2': 'Doge Miner 2',
+  'dome-keeper': 'Dome Keeper',
+  'doodle-jump': 'Doodle Jump',
+  'doom': 'Doom',
+  'doom-2': 'Doom 2',
+  'doom-3': 'Doom 3',
+  'doom-64': 'Doom 64',
+  'dr-mario': 'Dr. Mario',
+  'dreadhead-parkour': 'Dreadhead Parkour',
+  'drift-boss': 'Drift Boss',
+  'drift-hunter': 'Drift Hunter',
+  'drive-mad': 'Drive Mad',
+  'duck-life-1': 'Duck Life 1',
+  'duck-life-2': 'Duck Life 2',
+  'duck-life-3': 'Duck Life 3',
+  'duck-life-4': 'Duck Life 4',
+  'duck-life-5': 'Duck Life 5',
+  'duck-life-6': 'Duck Life 6',
+  'duck-life-7': 'Duck Life 7',
+  'duck-life-8': 'Duck Life 8',
+  'dumb-ways-to-die': 'Dumb Ways To Die',
+  'eggy-car': 'Eggy Car',
+  'escape-road': 'Escape Road',
+  'escape-road-2': 'Escape Road 2',
+  'escape-road-3': 'Escape Road 3',
+  'escape-road-city-2': 'Escape Road City 2',
+  'falling-fred': 'Falling Fred',
+  'fallout': 'Fallout',
+  'fallout-2': 'Fallout 2',
+  'fancy-pants-adventures': 'Fancy Pants Adventures',
+  'fancy-pants-adventures-2': 'Fancy Pants Adventures 2',
+  'fancy-pants-adventures-3': 'Fancy Pants Adventures 3',
+  'fears-to-fathom-home-alone': 'Fears To Fathom: Home Alone',
+  'fez': 'FEZ',
+  'final-fantasy-vii': 'Final Fantasy VII',
+  'fireboy-and-watergirl': 'Fireboy and Watergirl',
+  'fireboy-and-watergirl-2': 'Fireboy and Watergirl 2',
+  'fireboy-and-watergirl-3': 'Fireboy and Watergirl 3',
+  'fireboy-and-watergirl-4': 'Fireboy and Watergirl 4',
+  'fish': 'FISH',
+  'five-nights-at-candys': 'Five Nights At Candys',
+  'five-nights-at-candys-2': 'Five Nights At Candys 2',
+  'five-nights-at-epsteins': 'Five Nights At Epsteins',
+  'five-nights-at-last-breath': 'Five Nights At Last Breath',
+  'flappy-bird': 'Flappy bird',
+  'flying-gorilla': 'Flying Gorilla',
+  'fnaf': 'FNAF',
+  'fnaf-sisters-location': 'FNAF Sisters Location',
+  'fnaf-ultimate-custom-night': 'FNAF Ultimate Custom Night',
+  'fnaf-world': 'FNAF World',
+  'fnaf-world-refreshed': 'FNAF World Refreshed',
+  'fnaf2': 'FNAF2',
+  'fnaf3': 'FNAF3',
+  'fnaf4': 'FNAF4',
+  'fnaf4-halloween': 'FNAF4 Halloween',
+  'fnaw': 'FNAW',
+  'fnf-friday-night-funkin': 'Friday Night Funkin',
+  'friday-night-funkin-bop-city': 'Friday Night Funkin Bop City',
+  'football-bros': 'Football Bros',
+  'fruit-ninja': 'Fruit Ninja',
+  'fused240': 'Fused240',
+  'gabriels-awesome-schoolhouse': 'Gabriel\'s Awesome Schoolhouse',
+  'gacha-life': 'Gacha Life',
+  'gacha-verse': 'Gacha Verse',
+  'getaway-shootout': 'Getaway Shootout',
+  'geometry-dash': 'Geometry Dash',
+  'getting-over-it': 'Getting Over It',
+  'gladihoppers': 'Gladihoppers',
+  'go-to-bed': 'Go to bed',
+  'google-baseball': 'Google Baseball',
+  'gorilla-tag': 'Gorilla Tag',
+  'granny': 'Granny',
+  'granny-2': 'Granny 2',
+  'granny-3': 'Granny 3',
+  'gravity-run': 'Gravity run',
+  'greybox': 'Greybox',
+  'gta-i': 'GTA I',
+  'gta-ii': 'GTA II',
+  'gta-iii': 'GTA III',
+  'gta-san-andreas': 'GTA San Andreas',
+  'gta-vice-city': 'GTA Vice City',
+  'gun-mayhem': 'Gun Mayhem',
+  'gun-mayhem-2': 'Gun Mayhem 2',
+  'gun-mayhem-redux': 'Gun Mayhem Redux',
+  'gunspin': 'Gunspin',
+  'half-life': 'Half life',
+  'half-life-2': 'Half life 2',
+  'half-life-opposing-force': 'Half life: Opposing Force',
+  'happy-wheels': 'Happy Wheels',
+  'helltaker': 'Helltaker',
+  'hollow-knight': 'Hollow Knight',
+  'hotline-miami': 'Hotline Miami',
+  'house-of-hazards': 'House Of Hazards',
+  'human-expenditure-program': 'HUMAN EXPENDITURE PROGRAM',
+  'ice-baby-quest-2': 'Ice Baby Quest 2',
+  'idle-breakout': 'Idle Breakout',
+  'iron-lung': 'Iron Lung',
+  'jeffrey-epstein-basics-in-education-and-kidnapping': 'Jeffrey Epstein Basics In Education And Kidnapping',
+  'jeffys-basics': 'Jeffys Basics',
+  'jelly-drift': 'Jelly Drift',
+  'jetpack-joyride': 'Jetpack Joyride',
+  'jumbo-mario': 'Jumbo Mario',
+  'karlson': 'Karlson',
+  'karlson2d': 'Karlson2D',
+  'kindergarten-1': 'Kindergarten 1',
+  'kindergarten-2': 'Kindergarten 2',
+  'kindergarten-3': 'Kindergarten 3',
+  'kirby-soft-and-wet': 'Kirby Soft And Wet',
+  'klifur': 'Klifur',
+  'laceys-flash-games': 'Lacey\'s Flash Games',
+  'learn-to-fly': 'Learn To Fly',
+  'learn-to-fly-2': 'Learn To Fly 2',
+  'learn-to-fly-3': 'Learn To Fly 3',
+  'learn-to-fly-idle': 'Learn To Fly Idle',
+  'lego-star-wars': 'Lego Star Wars',
+  'level-devil': 'Level Devil',
+  'line-rider': 'Line Rider',
+  'little-alchemy': 'Little Alchemy',
+  'little-alchemy-2': 'Little Alchemy 2',
+  'little-big-planet': 'Little Big Planet',
+  'madness-melee': 'Madness Melee',
+  'mario-kart-64': 'Mario Kart 64',
+  'mario-kart-7': 'Mario Kart 7',
+  'mario-kart-ds': 'Mario Kart DS',
+  'mario-party-1': 'Mario Party 1',
+  'mario-party-2': 'Mario Party 2',
+  'mario-party-3': 'Mario Party 3',
+  'megaman': 'Megaman',
+  'melon-playground': 'Melon Playground',
+  'merge-rot': 'Merge Rot',
+  'milkman-karlson': 'Milkman karlson',
+  'minecraft-1122': 'Minecraft 1.12.2',
+  'minecraft-188': 'Minecraft 1.8.8',
+  'minecraft-legacy-console-edition': 'Minecraft Legacy Console Edition',
+  'minecraft-pocket-edition': 'Minecraft Pocket Edition',
+  'minecraft-wurst': 'Minecraft Wurst',
+  'minesweeper-mania': 'Minesweeper Mania',
+  'minesweeper-plus': 'Minesweeper Plus',
+  'monkey-mart': 'Monkey Mart',
+  'moto-x3m': 'Moto X3M',
+  'my-teardrop': 'My teardrop, daniel',
+  'n-gon': 'n-gon',
+  'nazi-zombies-portable': 'Nazi Zombies: Portable',
+  'needy-streamer-overload': 'Needy Streamer Overload',
+  'new-super-mario-bros': 'New Super Mario Bros',
+  'node-buster': 'Node Buster',
+  'nubbys-number-factory': 'Nubbys Number Factory',
+  'om-nom-run': 'Om Nom Run',
+  'omori': 'OMORI',
+  'oneshot': 'Oneshot',
+  'orange-roulette': 'Orange Roulette',
+  'oshi-oshi-punch': 'Oshi Oshi Punch',
+  'osu': 'Osu!',
+  'overburden': 'Overburden',
+  'ovo': 'OvO',
+  'ovo-2': 'OvO 2',
+  'ovo-dimensions': 'OvO Dimensions',
+  'pacman': 'Pacman',
+  'pacman-world': 'Pacman World',
+  'pacman-world-2': 'Pacman World 2',
+  'paint-gal-adventures': 'Paint Gal Adventures',
+  'papas-bakeria': 'Papas Bakeria',
+  'papas-burgeria': 'Papas Burgeria',
+  'papas-cheeseria': 'Papas Cheeseria',
+  'papas-donuteria': 'Papas Donuteria',
+  'papas-freezeria': 'Papas Freezeria',
+  'papas-pizzaeria': 'Papas Pizzaeria',
+  'paper-mario': 'Paper Mario',
+  'paperio-2': 'Paperio 2',
+  'papers-please': 'Papers, Please',
+  'parappa-the-rapper': 'Parappa The Rapper',
+  'parappa-the-rapper-2': 'Parappa The Rapper 2',
+  'peaks-of-yore': 'Peaks of Yore',
+  'peggle': 'Peggle',
+  'people-playground': 'People Playground',
+  'pixel-gun-3d': 'Pixel Gun 3D',
+  'pizza-tower': 'Pizza Tower',
+  'pizza-tower-scoutdigo': 'Pizza Tower: Scoutdigo',
+  'plants-vs-zombies': 'Plants VS Zombies',
+  'plants-vs-zombies-garden-endless': 'Plants VS Zombies Garden Endless',
+  'plauge-inc': 'Plauge Inc',
+  'pokemon-academy-life-forever': 'Pokemon Academy Life Forever',
+  'pokemon-blue': 'Pokemon Blue',
+  'pokemon-crystal': 'Pokemon Crystal',
+  'pokemon-emerald': 'Pokemon Emerald',
+  'pokemon-gold': 'Pokemon Gold',
+  'pokemon-red': 'Pokemon Red',
+  'polytrack': 'Polytrack',
+  'portal': 'Portal',
+  'postal': 'Postal',
+  'pretend-its-not-there': 'Pretend its not there',
+  'quake': 'Quake',
+  'quake-ii': 'Quake II',
+  'quake-iii': 'Quake III',
+  'raft-wars': 'Raft Wars',
+  'raft-wars-2': 'Raft Wars 2',
+  'raft': 'RAFT',
+  'ragdoll-archers': 'Ragdoll Archers',
+  'ragdoll-hit': 'Ragdoll Hit',
+  'raldis-crack-house': 'Raldi\'s Crack House',
+  'rayman': 'Rayman',
+  'rerun': 'RE:RUN',
+  'repo': 'REPO',
+  'resident-evil-1': 'Resident Evil 1',
+  'resident-evil-2': 'Resident Evil 2',
+  'retro-bowl': 'Retro Bowl',
+  'retro-bowl-college': 'Retro Bowl College',
+  'riddle-school': 'Riddle School',
+  'riddle-school-2': 'Riddle School 2',
+  'riddle-school-3': 'Riddle School 3',
+  'riddle-school-4': 'Riddle School 4',
+  'riddle-school-5': 'Riddle School 5',
+  'riddle-school-transfer': 'Riddle School Transfer',
+  'riddle-school-transfer-2': 'Riddle School Transfer 2',
+  'rooftop-snipers': 'Rooftop Snipers',
+  'rooftop-snipers-2': 'Rooftop Snipers 2',
+  'run': 'Run',
+  'run-2': 'Run 2',
+  'run-3': 'Run 3',
+  'running-fred': 'Running Fred',
+  'saihate-station': 'Saihate Station',
+  'sandboxels': 'Sandboxels',
+  'sanic-ball': 'Sanic Ball',
+  'scary-path': 'Scary Path',
+  'schoolboy-runaway': 'Schoolboy Runaway',
+  'shift-at-midnight': 'Shift At Midnight',
+  'silksong': 'Silksong',
+  'skibidi-shooter': 'Skibidi Shooter',
+  'slender-the-8-pages': 'Slender: The 8 Pages',
+  'slendytubbies': 'Slendytubbies',
+  'slient-hill': 'Slient Hill',
+  'slime-ranchers': 'Slime Ranchers',
+  'slitherio': 'Slither.io',
+  'slope': 'Slope',
+  'slowroads': 'Slowroads',
+  'sm64-super-mario-64': 'Super Mario 64',
+  'super-mario-bros': 'Super Mario Bros',
+  'super-mario-galaxy-ds': 'Super Mario Galaxy DS',
+  'super-oliver-world': 'Super Oliver World',
+  'super-smash-bros': 'Super Smash Bros',
+  'smash-karts': 'Smash Karts',
+  'snow-rider-3d': 'Snow Rider 3D',
+  'snow-battle': 'Snow Battle',
+  'soccer-bros': 'Soccer Bros',
+  'soccer-random': 'Soccer Random',
+  'solar-smash': 'Solar Smash',
+  'solitaire': 'Solitaire',
+  'sonic-1': 'Sonic 1',
+  'sonic-2': 'Sonic 2',
+  'sonic-3': 'Sonic 3',
+  'sonic-4': 'Sonic 4',
+  'sonic-3d-blast': 'Sonic 3D Blast',
+  'sonic-cd': 'Sonic CD',
+  'sonic-exe': 'Sonic EXE',
+  'sonic-jam': 'Sonic Jam',
+  'sonic-mania': 'Sonic Mania',
+  'sonic-r': 'Sonic R',
+  'sonic-robo-blast-2': 'Sonic Robo Blast 2',
+  'sonic-robo-blast-2-kart': 'Sonic Robo Blast 2 KART',
+  'sonic-world-next': 'Sonic World Next',
+  'space-waves': 'Space waves',
+  'spank-the-monkey': 'Spank the monkey, bogs favorites',
+  'speed-stars': 'Speed Stars',
+  'spelunky-classic-hd': 'Spelunky Classic HD',
+  'starbound': 'Starbound',
+  'stardew-valley': 'Stardew Valley',
+  'stick-war-legacy': 'Stick War: Legacy',
+  'stick-with-it': 'Stick With It',
+  'stickman-hook': 'Stickman Hook',
+  'subway-surfers': 'Subway Surfers',
+  'super-hot': 'Super Hot',
+  'super-meat-boy': 'Super Meat Boy',
+  'super-monkey-ball-1-2': 'Super Monkey Ball 1 & 2',
+  'super-monkey-ball-jr': 'Super Monkey Ball JR',
+  'super-smash-flash': 'Super Smash Flash',
+  'super-smash-flash-2': 'Super Smash Flash 2',
+  'survivorio': 'Survivor.io',
+  'taiko-no-tatsujini': 'Taiko No Tatsujini',
+  'tanuki-sunset': 'Tanuki Sunset',
+  'tattle-tail': 'Tattle Tail',
+  'ten-basket': 'Ten Basket',
+  'terraria': 'Terraria',
+  'tetris': 'Tetris',
+  'tetrisweeper': 'Tetrisweeper',
+  'the-binding-of-issac': 'The Binding Of Issac',
+  'the-binding-of-isaac-wrath-of-the-lamb': 'The Binding Of Isaac Wrath Of The Lamb',
+  'the-binding-of-isaac-wrath-of-the-lamb-eternal': 'The Binding Of Isaac Wrath Of The Lamb: Eternal',
+  'the-binding-of-issac-rebirth': 'The Binding Of Issac: Rebirth',
+  'the-impossible-quiz': 'The Impossible Quiz',
+  'the-legend-of-zelda-ocarina-of-time': 'The Legend of Zelda Ocarina of Time',
+  'thats-not-my-neighbor': 'Thats Not My Neighbor',
+  'there-is-no-game': 'There Is No Game',
+  'time-shooter-1': 'Time Shooter 1',
+  'time-shooter-2': 'Time Shooter 2',
+  'time-shooter-3': 'Time Shooter 3',
+  'tiny-fishing': 'Tiny Fishing',
+  'to-the-core': 'To The Core',
+  'tomb-of-the-mask': 'Tomb Of The Mask',
+  'tomodachi-collection': 'Tomodachi Collection',
+  'touhou-mother': 'Touhou Mother',
+  'tube-jumpers': 'Tube Jumpers',
+  'tung-tung-horror': 'Tung Tung Horror',
+  'ultrakill': 'Ultrakill',
+  'ultrapool': 'Ultrapool',
+  'um-jammer-lammy': 'Um Jammer Lammy',
+  'undertale': 'Undertale',
+  'undertale-yellow': 'Undertale Yellow',
+  'untitled-goose-game': 'Untitled Goose Game',
+  'vampire-survivors': 'Vampire Survivors',
+  'vex': 'Vex',
+  'vex-2': 'Vex 2',
+  'vex-3': 'Vex 3',
+  'vex-4': 'Vex 4',
+  'vex-5': 'Vex 5',
+  'vex-6': 'Vex 6',
+  'vex-7': 'Vex 7',
+  'vex-8': 'Vex 8',
+  'vib-ribbon': 'Vib-Ribbon',
+  'volley-random': 'Volley Random',
+  'warioware-diy': 'Warioware D.I.Y',
+  'we-become-what-we-behold': 'We Become What We behold',
+  'webfishing': 'Webfishing',
+  'whos-your-daddy': 'Who\'s Your Daddy',
+  'witchs-heart': 'Witch\'s Heart',
+  'wordle': 'Wordle',
+  'worlds-hardest-game': 'Worlds Hardest Game',
+  'worlds-hardest-game-2': 'Worlds Hardest Game 2',
+  'worlds-hardest-game-3': 'Worlds Hardest Game 3',
+  'woodys-incredible-journey-to-the-escape-from-eternal-terror': 'Woody\'s Incredible Journey To The Escape From Eternal Terror',
+  'yandere-simulator': 'Yandere Simulator',
+  'yoked': 'Yoked',
+  'your-only-move-is-hustle': 'Your Only Move Is HUSTLE, YOMI Hustle',
+  'yume-nikki': 'Yume Nikki'
+};
 
 async function loadTruffledGames() {
   try {
     const res  = await fetch(TRUFFLED_API);
     if (!res.ok) return [];
     const data = await res.json();
-    return (Array.isArray(data.files) ? data.files : [])
-      .filter((f) => typeof f.name === 'string' && f.name.endsWith('.html'))
-      .map((f) => {
-        const filename = f.name.replace(/^\//, '');
-        return {
-          name:   filename.replace(/\.html$/i, '').replace(/[-_]/g, ' ').trim(),
-          url:    TRUFFLED_CDN + f.name,
-          gameId: 'truffled-' + filename.replace(/\.html$/i, '').replace(/[^a-z0-9]/gi, '-'),
-        };
-      });
+    const seen = new Set();
+    return (data.files || [])
+      .filter(f => typeof f.name === 'string' && f.name.endsWith('.html'))
+      .map(f => {
+        const filename = f.name.replace(/^\//, '').replace(/\.html$/i,'');
+        if (seen.has(filename)) return null;
+        seen.add(filename);
+        // Use hardcoded name map, fall back to title-cased folder name
+        const name = TRUFFLED_NAMES[filename] || (function(){
+          const SMALL = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','vs','vs.']);
+          return filename.split('-').map((w,i) =>
+            (i === 0 || !SMALL.has(w.toLowerCase()))
+              ? w.charAt(0).toUpperCase() + w.slice(1)
+              : w.toLowerCase()
+          ).join(' ');
+        })();
+        const gameUrl = TRUFFLED_BASE + '/unityframe.html?url=' + encodeURIComponent('/games/' + filename + '/index.html');
+        return { gameId: 'tr-' + filename.replace(/[^a-z0-9]/gi,'-'), name, rawUrl: gameUrl, source: 'truffled' };
+      })
+      .filter(Boolean);
   } catch { return []; }
 }
 
@@ -315,61 +849,92 @@ async function loadAndRenderGames() {
   const countEl = document.getElementById('panel-game-count');
   list.innerHTML = '<span class="loading-text">loading games...</span>';
 
-  const [zones, truffled] = await Promise.all([loadGnMathZones(), loadTruffledGames()]);
-  const gnNames = new Set(zones.map((z) => norm(z.name || z.title || '')).filter(Boolean));
-  const unique  = truffled.filter((g) => !gnNames.has(norm(g.name)));
+  try {
+    const [fbGames, trGames] = await Promise.all([loadFreebuisnessGames(), loadTruffledGames()]);
+    const allGames = [...fbGames, ...trGames];
 
-  if (zones.length + unique.length === 0) {
-    list.innerHTML = '<span class="loading-text">could not load games</span>';
-    gamesLoading = false;
-    return;
-  }
+    if (!allGames.length) {
+      list.innerHTML = '<span class="loading-text">could not load games</span>';
+      gamesLoading = false;
+      return;
+    }
 
-  list.innerHTML = '';
-  if (countEl) countEl.textContent = (zones.length + unique.length) + ' games';
+    const frag     = document.createDocumentFragment();
+    const seen     = new Set();   // by gameId
+    const seenNames = new Set();  // by normalized name — prevents cross-source dupes
 
-  const frag = document.createDocumentFragment();
-  zones.forEach((zone) => {
-    const raw = (zone.url || '').replace('{HTML_URL}', HTML_CDN).replace('{COVER_URL}', COVERS_CDN);
-    if (!raw.startsWith('http')) return;
-    frag.appendChild(_makeGameLink(window.PROXY_BASE ? window.PROXY_BASE + raw : raw, zone.name || zone.title || ('Game ' + zone.id), 'gnmath-' + zone.id, 'gn-math', raw));
-  });
-  unique.forEach((g) => frag.appendChild(_makeGameLink(window.PROXY_BASE ? window.PROXY_BASE + g.url : g.url, g.name, g.gameId, 'truffled', g.url)));
-  list.appendChild(frag);
+    function normName(n) {
+      return n.toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .replace(/\s+/g, '');
+    }
 
-  // Wire filter input + source tabs
-  const searchInput = document.getElementById('game-search');
-  if (searchInput) {
-    searchInput.value = '';
-    searchInput.addEventListener('input', applyGameFilter);
-  }
-  document.querySelectorAll('.filter-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.filter-tab').forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
-      applyGameFilter();
+    allGames.forEach(g => {
+      if (seen.has(g.gameId)) return;
+      const nn = normName(g.name);
+      if (seenNames.has(nn)) return;
+      seen.add(g.gameId);
+      seenNames.add(nn);
+      const proxyUrl = window.PROXY_BASE ? window.PROXY_BASE + g.rawUrl : g.rawUrl + '?t=' + Date.now();
+      frag.appendChild(_makeGameLink(proxyUrl, g.name, g.gameId, g.source, g.rawUrl));
     });
-  });
 
-  refreshCounterUI();
+    list.innerHTML = '';
+    list.appendChild(frag);
+    if (countEl) countEl.textContent = seen.size + ' games';
+
+    const searchInput = document.getElementById('game-search');
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.addEventListener('input', applyGameFilter);
+    }
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        applyGameFilter();
+      });
+    });
+
+    applyCustomNamesToDOM();
+    refreshCounterUI();
     applyGameFilter();
-  gamesLoaded  = true;
+
+    const snap = JSON.stringify([...seen]);
+    const prev = localStorage.getItem('cowboysstuff_game_snap');
+    if (prev) {
+      const prevSet  = new Set(JSON.parse(prev));
+      const newCount = [...seen].filter(id => !prevSet.has(id)).length;
+      const badge    = document.getElementById('new-games-badge');
+      if (badge && newCount > 0) { badge.textContent = '+' + newCount + ' new'; badge.hidden = false; }
+    }
+    localStorage.setItem('cowboysstuff_game_snap', snap);
+
+    gamesLoaded  = true;
+  } catch(err) {
+    list.innerHTML = '<span class="loading-text">could not load games</span>';
+  }
   gamesLoading = false;
 }
 
-function _makeGameLink(href, name, gameId, source) {
-  const a = document.createElement('a');
-  // Route through /game viewer so user can control resolution
-  // href is already /p/... — pass the raw URL as a param
-  const rawUrl  = href.startsWith(window.PROXY_BASE) ? href.slice(window.PROXY_BASE.length) : href;
-  const gameHref = (window.GAME_BASE || '/game') + '?url=' + encodeURIComponent(rawUrl) + '&name=' + encodeURIComponent(name);
-  a.className      = 'panel-link game-link';
-  a.href           = gameHref;
-  a.dataset.game   = gameId;
-  a.dataset.source = source;
-  a.dataset.rawUrl = rawUrl; // keep for recent sites
-  a.target         = '_self';
-  const ns = document.createElement('span'); ns.className = 'game-name'; ns.textContent = name;
+function _makeGameLink(href, name, gameId, source, rawUrlOverride) {
+  const a      = document.createElement('a');
+  const rawUrl = rawUrlOverride || (href.startsWith(window.PROXY_BASE||'_') ? href.slice((window.PROXY_BASE||'').length) : href);
+  const displayName = getGameName(gameId, name);
+  a.className       = 'panel-link game-link';
+  a.href            = '#';
+  a.dataset.game    = gameId;
+  a.dataset.source  = source;
+  a.dataset.rawUrl  = rawUrl;
+  a.dataset.defaultName = name;
+  a.dataset.displayName = displayName;
+  a.target          = '_self';
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const currentName = getGameName(gameId, name);
+    openGameInfo({ gameId, name: currentName, source, rawUrl, href });
+  });
+  const ns = document.createElement('span'); ns.className = 'game-name'; ns.textContent = displayName;
   const b  = document.createElement('span'); b.className  = 'game-badge'; b.id = 'plays-' + gameId; b.textContent = getCount(gameId);
   a.appendChild(ns); a.appendChild(b);
   return a;
@@ -383,7 +948,7 @@ function applyGameFilter() {
   document.querySelectorAll('#games-list .game-link').forEach((link) => {
     total++;
     const nameEl = link.querySelector('.game-name');
-    const matchQ = !q || (nameEl && nameEl.textContent.toLowerCase().includes(q));
+    const matchQ = !q || (nameEl && nameEl.textContent.toLowerCase().includes(q)) || (link.dataset.defaultName||'').toLowerCase().includes(q);
     const matchS = src === 'all' || link.dataset.source === src;
     link.style.display = (matchQ && matchS) ? '' : 'none';
     if (matchQ && matchS) visible++;
@@ -1095,7 +1660,9 @@ function openGameInfo(game) {
   if (!overlay) { playGame(game); return; }
 
   const id = game.gameId || game.id || '';
-  document.getElementById('gi-title').textContent = game.name;
+  if (renameRow) renameRow.hidden = true;
+  const displayedName = getGameName(game.gameId || game.id || '', game.name);
+  document.getElementById('gi-title').textContent = displayedName;
   document.getElementById('gi-source').textContent = game.source || game.cat || 'game';
   document.getElementById('gi-plays').textContent  = (getCount(id) || 0) + ' plays';
   document.getElementById('gi-ptime').textContent  = Math.round(getPtime(id) / 60) + 'm played';
@@ -1124,16 +1691,26 @@ function playGame(game) {
 
   startPlaytimeTracking(id);
 
-  const fsDefault = localStorage.getItem(FS_DEFAULT_KEY) === 'on';
-  const finalHref = fsDefault ? href + '&fs=1' : href;
+  const rawUrl    = game.rawUrl || game.url || '';
+  const linkTarget = getLinkTarget ? getLinkTarget() : '_self';
 
-  // If no proxy configured, open game URL directly
-  if (!window.PROXY_BASE) {
-    const rawUrl = game.rawUrl || '';
-    if (rawUrl) { window.open(rawUrl, '_blank'); return; }
+  if (window.PROXY_BASE && rawUrl) {
+    // Load the game URL through the proxy directly
+    const proxied = window.PROXY_BASE + rawUrl;
+    if (linkTarget === '_blank') window.open(proxied, '_blank');
+    else window.location.href = proxied;
+    return;
   }
 
-  const linkTarget = getLinkTarget ? getLinkTarget() : '_self';
+  // No proxy — open raw URL directly in new tab
+  if (rawUrl) {
+    window.open(rawUrl, '_blank');
+    return;
+  }
+
+  // Fallback to game.html wrapper
+  const fsDefault = localStorage.getItem(FS_DEFAULT_KEY) === 'on';
+  const finalHref = fsDefault ? href + '&fs=1' : href;
   if (linkTarget === '_blank') window.open(finalHref, '_blank');
   else window.location.href = finalHref;
 }
@@ -1141,6 +1718,51 @@ function playGame(game) {
 document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('game-info-overlay');
   if (!overlay) return;
+
+  // Rename game
+  const renameBtn   = document.getElementById('gi-rename-btn');
+  const renameRow   = document.getElementById('gi-rename-row');
+  const renameInput = document.getElementById('gi-rename-input');
+  const renameSave  = document.getElementById('gi-rename-save');
+  const renameClear = document.getElementById('gi-rename-clear');
+
+  renameBtn?.addEventListener('click', () => {
+    if (!_pendingGame) return;
+    renameRow.hidden = false;
+    renameInput.value = getGameName(_pendingGame.gameId, _pendingGame.name);
+    renameInput.focus();
+    renameInput.select();
+  });
+
+  function applyRename() {
+    if (!_pendingGame) return;
+    const id  = _pendingGame.gameId;
+    const val = renameInput.value.trim();
+    if (!val) return;
+    setGameName(id, val);
+    // Update modal title
+    document.getElementById('gi-title').textContent = val;
+    // Update DOM link
+    const link = document.querySelector('.game-link[data-game="' + id + '"] .game-name');
+    if (link) { link.textContent = val; }
+    _pendingGame.name = val;
+    renameRow.hidden = true;
+    toast('name saved');
+  }
+
+  renameSave?.addEventListener('click', applyRename);
+  renameInput?.addEventListener('keydown', e => { if (e.key === 'Enter') applyRename(); if (e.key === 'Escape') renameRow.hidden = true; });
+  renameClear?.addEventListener('click', () => {
+    if (!_pendingGame) return;
+    clearGameName(_pendingGame.gameId);
+    const def = _pendingGame.defaultName || _pendingGame.name;
+    document.getElementById('gi-title').textContent = def;
+    const link = document.querySelector('.game-link[data-game="' + _pendingGame.gameId + '"] .game-name');
+    if (link) link.textContent = def;
+    renameInput.value = def;
+    renameRow.hidden = true;
+    toast('name reset');
+  });
 
   document.getElementById('gi-play-btn')?.addEventListener('click', () => {
     overlay.classList.add('hidden');
@@ -1150,6 +1772,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('gi-close')?.addEventListener('click', () => {
     overlay.classList.add('hidden');
     _pendingGame = null;
+    if (renameRow) renameRow.hidden = true;
   });
 
   document.getElementById('gi-share-btn')?.addEventListener('click', () => {
@@ -2057,6 +2680,7 @@ const EXPORT_KEYS = [
   'cowboysstuff_flash_favs',
   'cowboysstuff_retro_favs',
   'cowboysstuff_collections',
+  'cowboysstuff_game_names',
   'cowboysstuff_achievements',
   'cowboysstuff_consoles_tried',
   'cowboysstuff_played_ids',
@@ -2175,6 +2799,7 @@ function importData(file) {
 })();
 
 const ACH_EXPORT_KEYS = [
+  'cowboysstuff_game_names',
   'cowboysstuff_achievements',
   'cowboysstuff_consoles_tried',
   'cowboysstuff_played_ids',
@@ -2561,5 +3186,182 @@ const FONT_SIZE_KEY = 'cowboysstuff_font_size';
     const val = parseInt(slider.value, 10);
     applyFontSize(val);
     localStorage.setItem(FONT_SIZE_KEY, String(val));
+  });
+})();
+
+// ── AI Chat ────────────────────────────────────────────────────
+(function initAiChat() {
+  const API_KEY  = 'sk-navy-qGpaQOidm4dVweVspfUDbqJAnJRAibjIGCHR_GVu2Bw';
+  const API_BASE = 'https://api.navy/v1';
+  const MODEL    = 'gpt-4.1';
+  const HISTORY_KEY = 'cowboysstuff_ai_history';
+  const MAX_HISTORY = 40; // messages to keep in memory
+
+  let history = [];
+  let busy    = false;
+
+  function loadHistory() {
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+    catch { history = []; }
+  }
+  function saveHistory() {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY))); }
+    catch {}
+  }
+
+  function scrollBottom() {
+    const msgs = document.getElementById('ai-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function addBubble(role, text) {
+    const msgs = document.getElementById('ai-messages');
+    if (!msgs) return null;
+    const div = document.createElement('div');
+    div.className = 'ai-msg ' + role;
+    div.textContent = text;
+    msgs.appendChild(div);
+    scrollBottom();
+    return div;
+  }
+
+  function renderHistory() {
+    const msgs = document.getElementById('ai-messages');
+    if (!msgs) return;
+    msgs.innerHTML = '';
+    history.forEach(m => addBubble(m.role, m.content));
+  }
+
+  async function sendMessage(text) {
+    if (busy || !text.trim()) return;
+    busy = true;
+
+    const input   = document.getElementById('ai-input');
+    const sendBtn = document.getElementById('ai-send-btn');
+    if (input)   input.value = '';
+    if (sendBtn) sendBtn.disabled = true;
+
+    history.push({ role: 'user', content: text });
+    addBubble('user', text);
+
+    const thinking = addBubble('thinking', '');
+    if (thinking) thinking.innerHTML = 'thinking<span class="ai-thinking-dots"></span>';
+
+    try {
+      const res = await fetch(API_BASE + '/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': 'Bearer ' + API_KEY,
+        },
+        body: JSON.stringify({
+          model:    MODEL,
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant on cowboysstuff, an unblocked games site. Keep replies concise and friendly.' },
+            ...history.slice(-20),
+          ],
+          stream: true,
+        }),
+      });
+
+      if (!res.ok) throw new Error('API error ' + res.status);
+
+      // Remove thinking bubble, create streaming bubble
+      if (thinking && thinking.parentNode) thinking.parentNode.removeChild(thinking);
+      const bubble = addBubble('assistant', '');
+      let full = '';
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (!trimmed.startsWith('data: ')) continue;
+          try {
+            const json  = JSON.parse(trimmed.slice(6));
+            const delta = json.choices?.[0]?.delta?.content;
+            if (delta) {
+              full += delta;
+              if (bubble) bubble.textContent = full;
+              scrollBottom();
+            }
+          } catch {}
+        }
+      }
+
+      if (full) {
+        history.push({ role: 'assistant', content: full });
+        saveHistory();
+      }
+
+    } catch (err) {
+      if (thinking && thinking.parentNode) thinking.parentNode.removeChild(thinking);
+      addBubble('error', 'Error: ' + (err.message || 'could not reach AI'));
+    }
+
+    busy = false;
+    if (sendBtn) sendBtn.disabled = false;
+    if (input)   input.focus();
+  }
+
+  // Wire nav button
+  document.addEventListener('DOMContentLoaded', () => {
+    loadHistory();
+
+    const navAi = document.getElementById('nav-ai');
+    if (navAi) {
+      navAi.addEventListener('click', () => {
+        const panel = document.getElementById('panel-ai');
+        const isOpen = panel && !panel.hidden;
+        // Close all panels first (reuse existing closeAll or just toggle)
+        if (typeof closeAll === 'function') closeAll();
+        if (!isOpen && panel) {
+          panel.hidden = false;
+          renderHistory();
+          setTimeout(() => {
+            const input = document.getElementById('ai-input');
+            if (input) input.focus();
+          }, 50);
+        }
+      });
+    }
+
+    const sendBtn = document.getElementById('ai-send-btn');
+    const input   = document.getElementById('ai-input');
+    const clearBtn = document.getElementById('ai-clear-btn');
+
+    if (sendBtn) sendBtn.addEventListener('click', () => {
+      const v = input?.value.trim();
+      if (v) sendMessage(v);
+    });
+
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const v = input.value.trim();
+        if (v) sendMessage(v);
+      }
+    });
+
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      history = [];
+      saveHistory();
+      const msgs = document.getElementById('ai-messages');
+      if (msgs) msgs.innerHTML = '';
+    });
+  });
+
+  // Keyboard shortcut: I key
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (e.key === 'i' || e.key === 'I') {
+      const navAi = document.getElementById('nav-ai');
+      if (navAi) navAi.click();
+    }
   });
 })();
